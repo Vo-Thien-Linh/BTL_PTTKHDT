@@ -1,0 +1,136 @@
+﻿@model BTL_PTTKHDT.Models.DashboardViewModel
+
+@{
+    ViewData["Title"] = "Bảng điều khiển";
+}
+
+<div class="row g-3 mb-3">
+    @foreach (var kpi in Model.Kpis)
+    {
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="card app-kpi-card h-100">
+                <div class="card-body d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="text-secondary small">@kpi.Title</div>
+                        <div class="fs-4 fw-semibold mt-1">@kpi.ValueText</div>
+                        <div class="small mt-2">
+                            @if (kpi.IsDeltaPositive)
+                            {
+                                <span class="text-success">@kpi.DeltaText</span>
+                            }
+                            else
+                            {
+                                <span class="text-danger">@kpi.DeltaText</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="app-kpi-icon app-kpi-icon--@kpi.Theme rounded-3 d-flex align-items-center justify-content-center">
+                        <i class="bi @kpi.Icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-8">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-semibold">So sánh Giải ngân theo tháng</div>
+                    <form method="get">
+                        <select name="year" class="form-select form-select-sm" style="width: 130px" aria-label="Chọn năm" onchange="this.form.submit()">
+                            @foreach (var y in Model.AvailableYears)
+                            {
+                                if (y == Model.SelectedYear)
+                                {
+                                    <option value="@y" selected>@("Năm " + y)</option>
+                                }
+                                else
+                                {
+                                    <option value="@y">@("Năm " + y)</option>
+                                }
+                            }
+                        </select>
+                    </form>
+                </div>
+
+                <div class="app-chart-wrap">
+                    <canvas id="disbursementChart" height="110"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-semibold">Đơn vay mới nhất</div>
+                    <a class="text-decoration-none" href="#">Xem tất cả</a>
+                </div>
+
+                <div class="list-group list-group-flush">
+                    @foreach (var item in Model.LatestLoans)
+                    {
+                        <div class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="me-2">
+                                    <div class="fw-semibold">@item.CustomerName</div>
+                                    <div class="text-secondary small">@item.Code</div>
+                                </div>
+                                <span class="badge rounded-pill text-bg-@item.StatusKind">@item.StatusText</span>
+                            </div>
+                            <div class="text-secondary small mt-1">@item.AmountText</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            const el = document.getElementById('disbursementChart');
+            if (!el) return;
+
+            const labels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DisbursementMonthLabels));
+            const data = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DisbursementValues));
+
+            new Chart(el, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Giải ngân',
+                        data,
+                        tension: 0.35,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.06)' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        })();
+    </script>
+}

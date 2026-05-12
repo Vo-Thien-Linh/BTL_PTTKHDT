@@ -1,0 +1,112 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - BTL_PTTKHDT</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/BTL_PTTKHDT.styles.css" asp-append-version="true" />
+</head>
+<body>
+    @{
+        var currentController = (ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty);
+        var currentAction = (ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty);
+        bool IsActive(string controller, string? action = null)
+        {
+            if (!currentController.Equals(controller, StringComparison.OrdinalIgnoreCase)) return false;
+            if (action is null) return true;
+            return currentAction.Equals(action, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+    <div class="app-shell">
+        <aside class="app-sidebar">
+            <div class="app-brand px-3 py-3 border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="app-brand-mark rounded-3 d-flex align-items-center justify-content-center">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <div>
+                        <div class="fw-semibold">Hệ thống Tín dụng</div>
+                        <div class="text-secondary small">Phân tích &amp; Phê duyệt</div>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="px-2 py-2">
+                <a class="app-nav-link @(IsActive("Home","Index") ? "active" : "")" asp-controller="Home" asp-action="Index">
+                    <i class="bi bi-grid me-2"></i>
+                    Bảng điều khiển
+                </a>
+                <a class="app-nav-link @(IsActive("Customer") ? "active" : "")" asp-controller="Customer" asp-action="Index">
+                    <i class="bi bi-people me-2"></i>
+                    Quản lý khách hàng
+                </a>
+                <a class="app-nav-link @(IsActive("Employee") ? "active" : "")" asp-controller="Employee" asp-action="Index">
+                    <i class="bi bi-person-badge me-2"></i>
+                    Quản lý nhân sự
+                </a>
+                <a class="app-nav-link" href="#">
+                    <i class="bi bi-folder2-open me-2"></i>
+                    Hồ sơ vay vốn
+                </a>
+                <a class="app-nav-link" href="#">
+                    <i class="bi bi-cash-coin me-2"></i>
+                    Giải ngân &amp; Quản lý nợ
+                </a>
+
+                <div class="app-nav-divider"></div>
+
+                <a class="app-nav-link" asp-controller="Home" asp-action="Privacy">
+                    <i class="bi bi-gear me-2"></i>
+                    Cài đặt
+                </a>
+                <a class="app-nav-link text-danger" href="#">
+                    <i class="bi bi-box-arrow-right me-2"></i>
+                    Đăng xuất
+                </a>
+            </nav>
+        </aside>
+
+        <div class="app-main">
+            <header class="app-topbar border-bottom">
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                    <div class="fw-semibold">@(ViewData["Title"] ?? "Quản lý Tín dụng")</div>
+
+                    <form class="app-search" role="search">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input class="form-control" type="search" placeholder="Tìm kiếm hồ sơ..." aria-label="Search" />
+                        </div>
+                    </form>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-light" aria-label="Notifications">
+                            <i class="bi bi-bell"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-light" aria-label="Help">
+                            <i class="bi bi-question-circle"></i>
+                        </button>
+                        <div class="app-user rounded-circle d-flex align-items-center justify-content-center" aria-label="User">
+                            <i class="bi bi-person"></i>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main role="main" class="app-content">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

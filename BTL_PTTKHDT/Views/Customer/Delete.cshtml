@@ -1,0 +1,13 @@
+@model BTL_PTTKHDT.Models.KhachHang
+@{ ViewData["Title"] = "Xóa khách hàng"; }
+<div class='container-fluid'>
+  <h2>Xác nhận xóa: @Model.HoTen</h2>
+  <div class="card p-3">
+      <p class="text-danger">Bạn có chắc chắn muốn xóa khách hàng này vĩnh viễn không?</p>
+      <form asp-action='Delete' method='post'>
+          <input type="hidden" asp-for="MaKh" />
+          <button type='submit' class='btn btn-danger'>Xóa</button>
+          <a asp-action='Index' class='btn btn-secondary'>Hủy</a>
+      </form>
+  </div>
+</div>

@@ -1,0 +1,36 @@
+@model BTL_PTTKHDT.Models.KhachHang
+@{ ViewData["Title"] = "Sửa khách hàng"; }
+<div class='container-fluid'>
+  <h2>Sửa khách hàng: @Model.HoTen</h2>
+  <div class="card p-3">
+      <form asp-action='Edit' method='post' enctype='multipart/form-data'>
+          <div asp-validation-summary="All" class="text-danger mb-3 font-weight-bold"></div>
+          <input type="hidden" asp-for="MaKh" />
+          <div class='mb-3'>
+              <label>Mã khách hàng</label>
+              <input class='form-control' value='@Model.MaKh' readonly />
+          </div>
+          <div class='mb-3'><label>Họ tên</label><input asp-for='HoTen' class='form-control' /><span asp-validation-for='HoTen' class='text-danger'></span></div>
+          <div class='mb-3'><label>CMND/CCCD</label><input asp-for='CmndCccd' class='form-control' maxlength="12" inputmode="numeric" /><span asp-validation-for='CmndCccd' class='text-danger'></span></div>
+          <div class='mb-3'><label>SĐT</label><input asp-for='SoDienThoai' class='form-control' maxlength="10" inputmode="numeric" /><span asp-validation-for='SoDienThoai' class='text-danger'></span></div>
+          <div class='mb-3'><label>Ngày sinh</label><input asp-for='NgaySinh' type='date' class='form-control' /><span asp-validation-for='NgaySinh' class='text-danger'></span></div>
+          <div class='mb-3'><label>Email</label><input asp-for='Email' type='email' class='form-control' /><span asp-validation-for='Email' class='text-danger'></span></div>
+          <div class='mb-3'><label>Địa chỉ</label><input asp-for='DiaChi' class='form-control' /><span asp-validation-for='DiaChi' class='text-danger'></span></div>
+          <div class='mb-3'><label>Loại khách hàng</label><input asp-for='LoaiKhachHang' class='form-control' /><span asp-validation-for='LoaiKhachHang' class='text-danger'></span></div>
+          <div class='mb-3'>
+              <label>Ảnh đại diện (chọn file mới nếu muốn đổi)</label>
+              <input type='file' name='AnhDaiDienFile' class='form-control' accept='image/*' />
+              <div class='form-text'>Khách hàng doanh nghiệp có thể không cần ảnh đại diện.</div>
+              @Html.ValidationMessage("AnhDaiDienFile", "", new { @class = "text-danger" })
+          </div>
+          <div class='mb-3'>
+              <div class="form-check">
+                  <input class="form-check-input" type="checkbox" asp-for="IsActive" />
+                  <label class="form-check-label" asp-for="IsActive">Hoạt động</label>
+              </div>
+          </div>
+          <button type='submit' class='btn btn-primary'>Lưu</button>
+          <a asp-action='Index' class='btn btn-secondary'>Hủy</a>
+      </form>
+  </div>
+</div>
