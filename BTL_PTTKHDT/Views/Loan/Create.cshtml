@@ -1,0 +1,141 @@
+@model BTL_PTTKHDT.Models.LoanCreateViewModel
+@{
+    ViewData["Title"] = "Tạo đơn vay mới";
+}
+
+<div class="container-fluid">
+    <h2>@ViewData["Title"]</h2>
+    <div class="card p-3">
+        <form asp-action="Create" method="post">
+            <div asp-validation-summary="All" class="text-danger mb-3 font-weight-bold"></div>
+
+            <div class="mb-3">
+                <label class="form-label">Tra cứu khách hàng theo SĐT</label>
+                <input id="customer-lookup-input" class="form-control" placeholder="Nhập SĐT (10 số)" autocomplete="off" maxlength="10" inputmode="numeric" />
+                <div class="d-flex gap-2 mt-2">
+                    <button id="customer-lookup-btn" type="button" class="btn btn-sm btn-outline-primary">Tra cứu</button>
+                    <button id="customer-clear-btn" type="button" class="btn btn-sm btn-outline-secondary">Xóa</button>
+                </div>
+                <div id="customer-lookup-error" class="text-danger small mt-2" style="display:none;"></div>
+                <input asp-for="MaKh" type="hidden" id="customer-ma-kh" />
+                <span asp-validation-for="MaKh" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Tên khách hàng</label>
+                <input id="customer-name" class="form-control" value="@Model.TenKhachHang" readonly />
+                <div class="form-text">Tự động lấy theo số điện thoại.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Loại khách hàng</label>
+                <input id="customer-type" class="form-control" value="@(Model.LoaiKhachHang == "business" ? "Doanh nghiệp" : "Cá nhân")" readonly />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Số giấy tờ (CMND/CCCD hoặc MST)</label>
+                <input id="customer-doc" class="form-control" value="@Model.SoGiayTo" readonly />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Số tiền yêu cầu</label>
+                <input asp-for="SoTienYeuCau" class="form-control" inputmode="numeric" />
+                <span asp-validation-for="SoTienYeuCau" class="text-danger"></span>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Kỳ hạn đề nghị (tháng)</label>
+                        <input asp-for="KyHanDeNghi" class="form-control" inputmode="numeric" />
+                        <span asp-validation-for="KyHanDeNghi" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Lãi suất đề nghị (%/năm)</label>
+                        <input asp-for="LaiSuatDeNghi" class="form-control" inputmode="decimal" />
+                        <span asp-validation-for="LaiSuatDeNghi" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Mục đích vay</label>
+                <input asp-for="MucDichVay" class="form-control" />
+                <span asp-validation-for="MucDichVay" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Ghi chú</label>
+                <textarea asp-for="GhiChu" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="GhiChu" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Tạo đơn</button>
+            <a asp-action="Index" class="btn btn-secondary">Hủy</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const input = document.getElementById('customer-lookup-input');
+            const btn = document.getElementById('customer-lookup-btn');
+            const clearBtn = document.getElementById('customer-clear-btn');
+            const err = document.getElementById('customer-lookup-error');
+            const maKh = document.getElementById('customer-ma-kh');
+            const name = document.getElementById('customer-name');
+            const type = document.getElementById('customer-type');
+            const doc = document.getElementById('customer-doc');
+
+            function showError(message) {
+                err.textContent = message || '';
+                err.style.display = message ? 'block' : 'none';
+            }
+
+            function clearCustomer() {
+                maKh.value = '';
+                name.value = '';
+                type.value = '';
+                doc.value = '';
+                showError('');
+            }
+
+            async function lookup() {
+                const q = (input.value || '').trim();
+                if (!q) {
+                    showError('Vui lòng nhập số điện thoại để tra cứu.');
+                    return;
+                }
+
+                showError('');
+                const url = '/api/customers/lookup-phone?phone=' + encodeURIComponent(q);
+                const res = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+                if (!res.ok) {
+                    clearCustomer();
+                    showError('Không tìm thấy khách hàng.');
+                    return;
+                }
+
+                const data = await res.json();
+                maKh.value = data.maKh || data.MaKh || '';
+                name.value = data.hoTen || data.HoTen || '';
+                doc.value = data.cmndCccd || data.CmndCccd || '';
+                const rawType = (data.loaiKhachHang || data.LoaiKhachHang || '').toString().toLowerCase();
+                type.value = rawType.includes('doanh') ? 'Doanh nghiệp' : 'Cá nhân';
+            }
+
+            btn.addEventListener('click', () => lookup());
+            clearBtn.addEventListener('click', () => clearCustomer());
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    lookup();
+                }
+            });
+        })();
+    </script>
+}

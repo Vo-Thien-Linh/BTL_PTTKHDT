@@ -175,6 +175,13 @@ public sealed class CustomerController : Controller
         return $"KH{(maxId + 1):000}";
     }
 
+    private async Task<string> GetNextTaiSanKhCodeAsync(CancellationToken ct)
+    {
+        var codes = await _db.TaiSanKhachHangs.AsNoTracking().Select(x => x.MaTaiSanKh).ToListAsync(ct);
+        var maxId = codes.Select(x => ParseCodeSuffix(x, "TSK")).DefaultIfEmpty(0).Max();
+        return $"TSK{(maxId + 1):0000}";
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(KhachHang model, IFormFile? AnhDaiDienFile, CancellationToken ct = default)
@@ -220,7 +227,53 @@ public sealed class CustomerController : Controller
     {
         var customer = await _db.KhachHangs.FirstOrDefaultAsync(x => x.MaKh == id, ct);
         if (customer == null) return NotFound();
+
+        var assets = await _db.TaiSanKhachHangs
+            .AsNoTracking()
+            .Where(x => x.MaKh == customer.MaKh)
+            .OrderByDescending(x => x.GiaTriDinhGia ?? x.GiaTriKhaiBao)
+            .ToListAsync(ct);
+
+        ViewData["CustomerAssets"] = assets;
         return View(customer);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddAsset(string id, LoanCollateralCreateViewModel model, CancellationToken ct = default)
+    {
+        var customer = await _db.KhachHangs.AsNoTracking().FirstOrDefaultAsync(x => x.MaKh == id, ct);
+        if (customer == null) return NotFound();
+
+        if (!ModelState.IsValid)
+        {
+            var msg = string.Join(" ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
+            TempData["AssetError"] = string.IsNullOrWhiteSpace(msg) ? "Dữ liệu tài sản không hợp lệ." : msg;
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        var now = DateTime.Now;
+        var newCode = await GetNextTaiSanKhCodeAsync(ct);
+
+        var entity = new TaiSanKhachHang
+        {
+            MaTaiSanKh = newCode,
+            MaKh = customer.MaKh,
+            LoaiTaiSan = model.LoaiTaiSan.Trim(),
+            GiaTriKhaiBao = model.GiaTriKhaiBao,
+            GiaTriDinhGia = null,
+            TyLeLtv = model.TyLeLtv,
+            GiayToPhapLy = model.GiayToPhapLy,
+            MoTa = model.MoTa,
+            NgayKhaiBao = DateOnly.FromDateTime(now),
+            NgayDinhGia = null,
+            MaNvdinhGia = null,
+            TrangThai = "Chua dinh gia"
+        };
+
+        _db.TaiSanKhachHangs.Add(entity);
+        await _db.SaveChangesAsync(ct);
+        return RedirectToAction(nameof(Edit), new { id });
     }
 
     [HttpPost]
@@ -239,6 +292,13 @@ public sealed class CustomerController : Controller
 
         if (!ModelState.IsValid)
         {
+            var assets = await _db.TaiSanKhachHangs
+                .AsNoTracking()
+                .Where(x => x.MaKh == existing.MaKh)
+                .OrderByDescending(x => x.GiaTriDinhGia ?? x.GiaTriKhaiBao)
+                .ToListAsync(ct);
+
+            ViewData["CustomerAssets"] = assets;
             return View(model);
         }
 
@@ -265,6 +325,14 @@ public sealed class CustomerController : Controller
         {
             var innerMsg = ex.InnerException?.Message ?? ex.Message;
             ModelState.AddModelError(nameof(AnhDaiDienFile), innerMsg);
+
+            var assets = await _db.TaiSanKhachHangs
+                .AsNoTracking()
+                .Where(x => x.MaKh == existing.MaKh)
+                .OrderByDescending(x => x.GiaTriDinhGia ?? x.GiaTriKhaiBao)
+                .ToListAsync(ct);
+
+            ViewData["CustomerAssets"] = assets;
             return View(model);
         }
     }
@@ -288,5 +356,160 @@ public sealed class CustomerController : Controller
             await _db.SaveChangesAsync(ct);
         }
         return RedirectToAction(nameof(Index));
+    }
+
+    // ──────────────────────────────────────────────
+    // API Endpoints
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Tìm kiếm + lọc danh sách khách hàng — trả JSON cho AJAX.
+    /// GET /api/customers/search?q=&amp;type=&amp;page=1&amp;pageSize=4
+    /// </summary>
+    [HttpGet("/api/customers/search")]
+    public async Task<IActionResult> SearchApi(
+        string? q, string? type, int page = 1, int pageSize = 4,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize is < 1 or > 50) pageSize = 4;
+
+        IQueryable<KhachHang> baseQuery = _db.KhachHangs.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim();
+            baseQuery = baseQuery.Where(x =>
+                x.MaKh.Contains(term) ||
+                x.HoTen.Contains(term) ||
+                x.SoDienThoai.Contains(term) ||
+                x.CmndCccd.Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            var norm = type.Trim().ToLowerInvariant();
+            if (norm is "canhan" or "ca-nhan" or "personal")
+                baseQuery = baseQuery.Where(x => !EF.Functions.Like(x.LoaiKhachHang.ToLower(), "%doanh%"));
+            else if (norm is "doanhnghiep" or "doanh-nghiep" or "business")
+                baseQuery = baseQuery.Where(x => EF.Functions.Like(x.LoaiKhachHang.ToLower(), "%doanh%"));
+        }
+
+        var totalCount = await baseQuery.CountAsync(ct);
+        var totalPages = totalCount <= 0 ? 1 : (int)Math.Ceiling((double)totalCount / pageSize);
+
+        var items = await baseQuery
+            .OrderByDescending(x => x.NgayTao)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new
+            {
+                x.MaKh,
+                MaKhText = x.MaKhText,
+                x.HoTen,
+                NgaySinhText = x.NgaySinh.ToString("dd/MM/yyyy"),
+                x.CmndCccd,
+                LoaiKhachHangText = NormalizeCustomerTypeText(x.LoaiKhachHang),
+                LoaiKhachHangKind = MapCustomerTypeKind(x.LoaiKhachHang),
+                x.SoDienThoai,
+                x.Email,
+                x.DiaChi,
+                x.AnhDaiDienUrl,
+                x.IsActive,
+                DiemTinDung = x.LichSuTinDungs
+                    .OrderByDescending(ls => ls.NgayCapNhat)
+                    .Select(ls => (int?)ls.DiemTinDung)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        return Json(new { items, totalCount, page, totalPages });
+    }
+
+    /// <summary>
+    /// Kiểm tra CCCD/CMND đã tồn tại chưa — dùng cho validate real-time.
+    /// GET /api/customers/check-cmnd?value=038...&amp;excludeId=KH001
+    /// </summary>
+    [HttpGet("/api/customers/check-cmnd")]
+    public async Task<IActionResult> CheckCmndApi(string value, string? excludeId = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return Json(new { exists = false });
+
+        var query = _db.KhachHangs.AsNoTracking().Where(x => x.CmndCccd == value.Trim());
+        if (!string.IsNullOrWhiteSpace(excludeId))
+            query = query.Where(x => x.MaKh != excludeId);
+
+        var exists = await query.AnyAsync(ct);
+        return Json(new { exists });
+    }
+
+    [HttpGet("/api/customers/lookup")]
+    public async Task<IActionResult> LookupApi(string q, CancellationToken ct = default)
+    {
+        var term = (q ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(term))
+            return BadRequest(new { message = "Thiếu tham số q." });
+
+        KhachHang? customer;
+        if (term.StartsWith("KH", StringComparison.OrdinalIgnoreCase))
+        {
+            customer = await _db.KhachHangs.AsNoTracking().FirstOrDefaultAsync(x => x.MaKh == term, ct);
+        }
+        else
+        {
+            customer = await _db.KhachHangs.AsNoTracking().FirstOrDefaultAsync(
+                x => x.CmndCccd == term || x.SoDienThoai == term,
+                ct);
+        }
+
+        if (customer == null)
+            return NotFound(new { message = "Không tìm thấy khách hàng." });
+
+        return Ok(new
+        {
+            customer.MaKh,
+            customer.HoTen,
+            customer.CmndCccd,
+            customer.SoDienThoai,
+            customer.LoaiKhachHang
+        });
+    }
+
+    [HttpGet("/api/customers/lookup-phone")]
+    public async Task<IActionResult> LookupByPhoneApi(string phone, CancellationToken ct = default)
+    {
+        var term = (phone ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(term))
+            return BadRequest(new { message = "Thiếu tham số phone." });
+
+        var customer = await _db.KhachHangs.AsNoTracking().FirstOrDefaultAsync(x => x.SoDienThoai == term, ct);
+        if (customer == null)
+            return NotFound(new { message = "Không tìm thấy khách hàng." });
+
+        return Ok(new
+        {
+            customer.MaKh,
+            customer.HoTen,
+            customer.CmndCccd,
+            customer.SoDienThoai,
+            customer.LoaiKhachHang
+        });
+    }
+
+    /// <summary>
+    /// Xóa khách hàng qua API — dùng cho xóa inline không reload trang.
+    /// DELETE /api/customers/{id}
+    /// </summary>
+    [HttpDelete("/api/customers/{id}")]
+    public async Task<IActionResult> DeleteApi(string id, CancellationToken ct = default)
+    {
+        var customer = await _db.KhachHangs.FirstOrDefaultAsync(x => x.MaKh == id, ct);
+        if (customer == null)
+            return NotFound(new { message = $"Không tìm thấy khách hàng: {id}" });
+
+        _db.KhachHangs.Remove(customer);
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { success = true, message = "Đã xóa khách hàng thành công." });
     }
 }

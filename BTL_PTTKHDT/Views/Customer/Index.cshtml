@@ -68,28 +68,30 @@
                 @foreach (var row in Model.Items)
                 {
                     <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
-                        <div class="card h-100 border-0 shadow-sm hover-card" style="cursor: pointer;" data-customer-id="@row.MaKh">
+                        <div class="card h-100 border-0 shadow-sm hover-card"
+                             style="cursor: pointer;"
+                             onclick="window.location='@Url.Action("Edit", new { id = row.MaKh })'">
                             <!-- Avatar Section -->
-                            <div class="position-relative bg-light" style="height: 180px; border-radius: 8px 8px 0 0; overflow: hidden;">
+                            <div class="position-relative" style="height: 180px; border-radius: 8px 8px 0 0; overflow: hidden;">
                                 @if (!string.IsNullOrWhiteSpace(row.AnhDaiDienUrl))
                                 {
                                     <img src="@row.AnhDaiDienUrl" alt="@row.HoTen" class="w-100 h-100" style="object-fit: cover;">
                                 }
                                 else
                                 {
-                                    <div class="w-100 h-100 d-flex align-items-center justify-content-center bg-gradient">
+                                    <div class="w-100 h-100 d-flex align-items-center justify-content-center avatar-placeholder">
                                         @if (row.LoaiKhachHangKind == "business")
                                         {
-                                            <i class="bi bi-buildings" style="font-size: 4rem; color: #d9d9d9;"></i>
+                                            <i class="bi bi-buildings avatar-icon"></i>
                                         }
                                         else
                                         {
-                                            <i class="bi bi-person-circle" style="font-size: 4rem; color: #d9d9d9;"></i>
+                                            <i class="bi bi-person-circle avatar-icon"></i>
                                         }
                                     </div>
                                 }
                                 <!-- Badge loại KH -->
-                                <span class="badge position-absolute top-2 end-2" style="background-color: rgba(0,0,0,0.6);">
+                                <span class="badge kh-type-badge position-absolute" style="top: 10px; right: 10px;">
                                     @if (row.LoaiKhachHangKind == "business")
                                     {
                                         <i class="bi bi-buildings me-1"></i>
@@ -101,19 +103,17 @@
                                     @row.LoaiKhachHangText
                                 </span>
                                 <!-- Status Badge -->
-                                <div class="position-absolute bottom-2 start-2">
+                                <div class="position-absolute" style="bottom: 10px; left: 10px;">
                                     @if (row.IsActive)
                                     {
-                                        <span class="badge bg-success">
-                                            <span class="position-relative d-inline-block" style="width: 8px; height: 8px; background: white; border-radius: 50%; margin-right: 4px;"></span>
-                                            Hoạt động
+                                        <span class="badge status-badge-active">
+                                            <span class="status-dot"></span>Hoạt động
                                         </span>
                                     }
                                     else
                                     {
-                                        <span class="badge bg-secondary">
-                                            <span class="position-relative d-inline-block" style="width: 8px; height: 8px; background: white; border-radius: 50%; margin-right: 4px;"></span>
-                                            Tạm ngưng
+                                        <span class="badge status-badge-inactive">
+                                            <span class="status-dot"></span>Tạm ngưng
                                         </span>
                                     }
                                 </div>
@@ -121,34 +121,31 @@
 
                             <!-- Card Body -->
                             <div class="card-body pb-2">
-                                <!-- Name & Code -->
                                 <div class="mb-2">
-                                    <h6 class="card-title mb-1 text-truncate">@row.HoTen</h6>
+                                    <h6 class="card-title mb-0 text-truncate fw-semibold">@row.HoTen</h6>
                                     <small class="text-muted">Mã: @row.MaKhText</small>
                                 </div>
-
-                                <!-- Info Grid -->
-                                <div class="small">
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Điện thoại:</span>
-                                        <span class="fw-semibold text-end text-truncate">@row.SoDienThoai</span>
+                                <div class="info-grid small">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="bi bi-telephone me-1"></i>Điện thoại</span>
+                                        <span class="info-value fw-medium">@row.SoDienThoai</span>
                                     </div>
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Ngày sinh:</span>
-                                        <span class="text-end">@row.NgaySinh.ToString("dd/MM/yyyy")</span>
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="bi bi-calendar3 me-1"></i>Ngày sinh</span>
+                                        <span class="info-value">@row.NgaySinh.ToString("dd/MM/yyyy")</span>
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(row.CmndCccd))
                                     {
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span class="text-muted">CMND/CCCD:</span>
-                                            <span class="text-end text-truncate">@row.CmndCccd</span>
+                                        <div class="info-row">
+                                            <span class="info-label"><i class="bi bi-card-text me-1"></i>CMND/CCCD</span>
+                                            <span class="info-value text-truncate">@row.CmndCccd</span>
                                         </div>
                                     }
                                     @if (row.DiemTinDung.HasValue)
                                     {
-                                        <div class="d-flex justify-content-between">
-                                            <span class="text-muted">Điểm tín dụng:</span>
-                                            <span class="fw-semibold @(row.DiemTinDung >= 700 ? "text-success" : row.DiemTinDung >= 500 ? "text-warning" : "text-danger")">
+                                        <div class="info-row">
+                                            <span class="info-label"><i class="bi bi-star me-1"></i>Điểm tín dụng</span>
+                                            <span class="info-value fw-semibold @(row.DiemTinDung >= 700 ? "credit-good" : row.DiemTinDung >= 500 ? "credit-medium" : "credit-bad")">
                                                 @row.DiemTinDung
                                             </span>
                                         </div>
@@ -156,21 +153,21 @@
                                 </div>
                             </div>
 
-                            <!-- Action Buttons -->
-                            <div class="card-footer bg-light border-top-0">
-                                <div class="d-grid gap-2">
-                                    <a asp-action="Edit" asp-route-id="@row.MaKh" class="btn btn-sm btn-primary" onclick="event.stopPropagation();">
-                                        <i class="bi bi-pencil"></i> Chi tiết
-                                    </a>
-                                </div>
-                                <div class="mt-2 d-flex gap-2">
-                                    <a asp-action="Edit" asp-route-id="@row.MaKh" class="btn btn-sm btn-outline-primary flex-grow-1" onclick="event.stopPropagation();">
-                                        <i class="bi bi-pencil"></i> Sửa
-                                    </a>
-                                    <a asp-action="Delete" asp-route-id="@row.MaKh" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation();">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </div>
+                            <!-- Action Bar -->
+                            <div class="card-action-bar" onclick="event.stopPropagation();">
+                                <a asp-action="Edit" asp-route-id="@row.MaKh"
+                                   class="action-btn action-btn-edit"
+                                   title="Chỉnh sửa thông tin">
+                                    <i class="bi bi-pencil-square"></i>
+                                    <span>Sửa</span>
+                                </a>
+                                <div class="action-divider"></div>
+                                <a asp-action="Delete" asp-route-id="@row.MaKh"
+                                   class="action-btn action-btn-delete"
+                                   title="Xóa khách hàng">
+                                    <i class="bi bi-trash3"></i>
+                                    <span>Xóa</span>
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -211,16 +208,110 @@
 </div>
 
 <style>
+    /* ── Card hover ── */
     .hover-card {
-        transition: all 0.3s ease;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        border-radius: 12px !important;
+        overflow: hidden;
     }
-
     .hover-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+        transform: translateY(-5px);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.12) !important;
     }
 
-    .bg-gradient {
-        background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+    /* ── Avatar placeholder ── */
+    .avatar-placeholder {
+        background: linear-gradient(135deg, #e8eef7 0%, #d0daea 100%);
+    }
+    .avatar-icon {
+        font-size: 4rem;
+        color: #a0b2cc;
+    }
+
+    /* ── Badges ── */
+    .kh-type-badge {
+        background: rgba(15,23,42,0.65);
+        backdrop-filter: blur(4px);
+        font-size: 0.72rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+    }
+    .status-badge-active {
+        background: linear-gradient(135deg, #16a34a, #22c55e);
+        font-size: 0.72rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .status-badge-inactive {
+        background: rgba(100,116,139,0.75);
+        backdrop-filter: blur(4px);
+        font-size: 0.72rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .status-dot {
+        width: 7px; height: 7px;
+        background: #fff;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    /* ── Info rows ── */
+    .info-grid { display: flex; flex-direction: column; gap: 6px; }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+    }
+    .info-label { color: #6b7280; white-space: nowrap; }
+    .info-value { color: #1e293b; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+    .credit-good   { color: #16a34a; }
+    .credit-medium { color: #d97706; }
+    .credit-bad    { color: #dc2626; }
+
+    /* ── Action Bar ── */
+    .card-action-bar {
+        display: flex;
+        align-items: stretch;
+        border-top: 1px solid #f1f5f9;
+        background: #fafbfc;
+    }
+    .action-btn {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 0;
+        font-size: 0.82rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: background 0.2s ease, color 0.2s ease;
+    }
+    .action-btn-edit {
+        color: #3b82f6;
+    }
+    .action-btn-edit:hover {
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .action-btn-delete {
+        color: #ef4444;
+    }
+    .action-btn-delete:hover {
+        background: #fef2f2;
+        color: #b91c1c;
+    }
+    .action-divider {
+        width: 1px;
+        background: #e2e8f0;
+        margin: 8px 0;
     }
 </style>

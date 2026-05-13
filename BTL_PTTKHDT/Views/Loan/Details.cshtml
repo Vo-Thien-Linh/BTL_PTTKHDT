@@ -1,0 +1,260 @@
+@model BTL_PTTKHDT.Models.LoanDetailViewModel
+@{
+    ViewData["Title"] = "Chi tiết đơn vay";
+}
+
+<div class="container-fluid">
+    <div class="d-flex align-items-start justify-content-between mb-3">
+        <div>
+            <h2 class="mb-1">@ViewData["Title"]</h2>
+            <div class="text-secondary">Mã đơn: <span class="fw-semibold">@Model.Loan.MaDon</span></div>
+        </div>
+        <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Quay lại</a>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card p-3">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Mã khách hàng</div>
+                        <div class="fw-semibold">@Model.Loan.MaKh</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Tên khách hàng</div>
+                        <div class="fw-semibold">@Model.Loan.TenKhachHang</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Loại khách hàng</div>
+                        <div class="fw-semibold">@(Model.Loan.LoaiKhachHang == "business" ? "Doanh nghiệp" : "Cá nhân")</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Giấy tờ</div>
+                        <div class="fw-semibold">@Model.Loan.NhanDangGiayTo @Model.Loan.SoGiayTo</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Số tiền yêu cầu</div>
+                        <div class="fw-semibold">@Model.Loan.SoTienYeuCau.ToString("N0") đ</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Mục đích vay</div>
+                        <div class="fw-semibold">@Model.Loan.MucDichVay</div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Kỳ hạn đề nghị</div>
+                        <div class="fw-semibold">@Model.KyHanDeNghi tháng</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Lãi suất đề nghị</div>
+                        <div class="fw-semibold">@(Model.LaiSuatDeNghi.HasValue ? $"{Model.LaiSuatDeNghi:0.##}%" : "-")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Ngày nộp đơn</div>
+                        <div class="fw-semibold">@Model.NgayNopDon.ToString("dd/MM/yyyy")</div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(Model.GhiChu))
+                    {
+                        <div class="col-12">
+                            <div class="text-secondary small mb-1">Ghi chú</div>
+                            <div class="fw-semibold">@Model.GhiChu</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="text-secondary">Trạng thái hồ sơ</div>
+                    <span class="badge text-bg-secondary">@Model.Loan.TrangThaiDon</span>
+                </div>
+
+                @if (TempData["DisburseError"] != null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@TempData["DisburseError"]</div>
+                }
+
+                @if (Model.Loan.TrangThaiDon == "da-duyet")
+                {
+                    <div class="mt-3">
+                        <form asp-action="Disburse" method="post" class="d-grid">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Loan.MaDon" />
+                            <button class="btn btn-sm btn-success" type="submit">Giải ngân</button>
+                        </form>
+                    </div>
+                }
+
+                <hr />
+
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="text-secondary small">Tổng TSĐB</div>
+                        <div class="fw-semibold">@Model.TongGiaTriDamBao.ToString("N0") đ</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small">Hạn mức gợi ý</div>
+                        <div class="fw-semibold">@Model.HanMucGoiY.ToString("N0") đ</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="text-secondary small">LTV (Yêu cầu / TSĐB)</div>
+                        <div class="fw-semibold">@(Model.TyLeLtv <= 0 ? "-" : $"{Model.TyLeLtv * 100m:0.0}%")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-lg-7">
+            <div class="card p-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="fw-semibold">Tài sản đảm bảo</div>
+                </div>
+
+                @if (TempData["CollateralError"] != null)
+                {
+                    <div class="alert alert-danger mb-3">@TempData["CollateralError"]</div>
+                }
+
+                <form asp-action="AddCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="border rounded-3 p-3 mb-3">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small text-secondary mb-1">Loại tài sản</label>
+                            <input name="LoaiTaiSan" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-secondary mb-1">Giá trị khai báo</label>
+                            <input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-secondary mb-1">Tỷ lệ LTV</label>
+                            <input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" />
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-sm btn-primary w-100" type="submit">Thêm tài sản</button>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-secondary mb-1">Giấy tờ pháp lý</label>
+                            <input name="GiayToPhapLy" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-secondary mb-1">Mô tả</label>
+                            <input name="MoTa" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </form>
+
+                @if (Model.TaiSanDamBao.Count == 0)
+                {
+                    <div class="text-secondary">Chưa có tài sản đảm bảo.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr class="text-secondary small">
+                                    <th>Mã</th>
+                                    <th>Loại</th>
+                                    <th class="text-end">Khai báo</th>
+                                    <th class="text-end">Định giá</th>
+                                    <th class="text-center">LTV</th>
+                                    <th class="text-center">Trạng thái</th>
+                                    <th class="text-end">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ts in Model.TaiSanDamBao)
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">@ts.MaTaiSanKh</td>
+                                        <td>
+                                            <div class="fw-semibold">@ts.LoaiTaiSan</div>
+                                            @if (!string.IsNullOrWhiteSpace(ts.MoTa))
+                                            {
+                                                <div class="text-secondary small">@ts.MoTa</div>
+                                            }
+                                        </td>
+                                        <td class="text-end">@ts.GiaTriKhaiBao.ToString("N0")</td>
+                                        <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? ts.GiaTriDinhGia.Value.ToString("N0") : "-")</td>
+                                        <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
+                                        <td class="text-center">
+                                            <span class="badge text-bg-light">@ts.TrangThai</span>
+                                        </td>
+                                        <td class="text-end">
+                                            <form asp-action="ValuateCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="d-flex gap-2 justify-content-end">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="MaTaiSanKh" value="@ts.MaTaiSanKh" />
+                                                <input name="GiaTriDinhGia" class="form-control form-control-sm" style="width: 120px;" placeholder="Định giá" inputmode="numeric" />
+                                                <button class="btn btn-sm btn-outline-primary" type="submit">Định giá</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card p-3">
+                <div class="fw-semibold mb-2">Phê duyệt (Tạo đơn → Kiểm tra → Phê duyệt)</div>
+
+                <div class="d-flex flex-column gap-2">
+                    @foreach (var step in Model.PheDuyet.OrderBy(x => x.CapPheDuyet))
+                    {
+                        <div class="border rounded-3 p-3">
+                            <div class="d-flex align-items-start justify-content-between gap-2">
+                                <div>
+                                    <div class="fw-semibold">@step.CapText</div>
+                                    <div class="text-secondary small">Trạng thái: <span class="fw-semibold">@step.TrangThai</span></div>
+                                    @if (!string.IsNullOrWhiteSpace(step.MaNv))
+                                    {
+                                        <div class="text-secondary small">Nhân viên: <span class="fw-semibold">@step.MaNv</span></div>
+                                    }
+                                    @if (step.NgayXuLy.HasValue)
+                                    {
+                                        <div class="text-secondary small">Ngày xử lý: <span class="fw-semibold">@step.NgayXuLy.Value.ToString("dd/MM/yyyy HH:mm")</span></div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(step.GhiChu))
+                                    {
+                                        <div class="text-secondary small">Ghi chú: <span class="fw-semibold">@step.GhiChu</span></div>
+                                    }
+                                </div>
+                                <div class="text-end">
+                                    @{
+                                        var canApprove = step.CapPheDuyet == 1 ? Model.Loan.TrangThaiMaker == "pending"
+                                            : step.CapPheDuyet == 2 ? Model.Loan.TrangThaiChecker == "pending"
+                                            : Model.Loan.TrangThaiApprover == "pending";
+                                    }
+                                    @if (canApprove)
+                                    {
+                                        <form asp-action="Decide" method="post" class="d-flex flex-column gap-2">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@Model.Loan.MaDon" />
+                                            <input type="hidden" name="cap" value="@step.CapPheDuyet" />
+                                            <input name="note" class="form-control form-control-sm" placeholder="Ghi chú..." />
+                                            <div class="d-flex gap-2 justify-content-end">
+                                                <button class="btn btn-sm btn-outline-danger" type="submit" name="decision" value="reject">Từ chối</button>
+                                                <button class="btn btn-sm btn-primary" type="submit" name="decision" value="approve">Duyệt</button>
+                                            </div>
+                                        </form>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,92 @@
+@model IReadOnlyList<BTL_PTTKHDT.Models.DebtLoanRowViewModel>
+@{
+    ViewData["Title"] = ViewData["Title"] ?? "Giải ngân & Quản lý nợ";
+    var q = (ViewData["Query"] as string) ?? string.Empty;
+    var page = (int)(ViewData["Page"] ?? 1);
+    var pageSize = (int)(ViewData["PageSize"] ?? 10);
+    var totalCount = (int)(ViewData["TotalCount"] ?? 0);
+    var totalPages = totalCount <= 0 ? 1 : (int)Math.Ceiling((double)totalCount / pageSize);
+}
+
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="mb-1">@ViewData["Title"]</h2>
+            <div class="text-secondary">Tổng: <span class="fw-semibold">@totalCount</span> khoản vay</div>
+        </div>
+
+        <form method="get" class="d-flex gap-2">
+            <input class="form-control form-control-sm" style="min-width: 260px" name="q" value="@q" placeholder="Tìm mã vay / mã đơn / khách hàng..." />
+            <button class="btn btn-sm btn-outline-primary" type="submit">Tìm</button>
+        </form>
+    </div>
+
+    <div class="card p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mã vay</th>
+                        <th>Mã đơn</th>
+                        <th>Khách hàng</th>
+                        <th class="text-end">Số tiền vay</th>
+                        <th class="text-end">Dư nợ gốc</th>
+                        <th class="text-center">Kỳ hạn</th>
+                        <th class="text-center">Lãi suất</th>
+                        <th>Giải ngân</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.Count == 0)
+                {
+                    <tr>
+                        <td colspan="10" class="text-center text-secondary p-4">Chưa có khoản vay.</td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var item in Model)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@item.MaVay</td>
+                            <td>@item.MaDon</td>
+                            <td>
+                                <div class="fw-semibold">@item.TenKhachHang</div>
+                                <div class="text-secondary small">@item.MaKh</div>
+                            </td>
+                            <td class="text-end">@item.SoTienVay.ToString("N0")</td>
+                            <td class="text-end">@item.DuNoGoc.ToString("N0")</td>
+                            <td class="text-center">@item.KyHan</td>
+                            <td class="text-center">@($"{item.LaiSuat:0.##}%")</td>
+                            <td>@item.NgayGiaiNgan.ToString("dd/MM/yyyy")</td>
+                            <td><span class="badge text-bg-light">@item.TrangThai</span></td>
+                            <td class="text-end">
+                                <a asp-action="Details" asp-route-id="@item.MaVay" class="btn btn-sm btn-outline-secondary">Chi tiết</a>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (totalPages > 1)
+    {
+        <div class="d-flex justify-content-end mt-3">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item @(page <= 1 ? "disabled" : "")">
+                        <a class="page-link" href="?q=@q&page=@(page-1)">Trước</a>
+                    </li>
+                    <li class="page-item disabled"><span class="page-link">@($"{page} / {totalPages}")</span></li>
+                    <li class="page-item @(page >= totalPages ? "disabled" : "")">
+                        <a class="page-link" href="?q=@q&page=@(page+1)">Sau</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
+</div>

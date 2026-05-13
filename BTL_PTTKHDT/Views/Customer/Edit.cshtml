@@ -33,4 +33,91 @@
           <a asp-action='Index' class='btn btn-secondary'>Hủy</a>
       </form>
   </div>
+
+  <div class="card p-3 mt-3">
+      <div class="d-flex align-items-center justify-content-between">
+          <h5 class="mb-0">Tài sản khách hàng</h5>
+          <span class="text-secondary small">@Model.MaKh</span>
+      </div>
+
+      @if (TempData["AssetError"] != null)
+      {
+          <div class="alert alert-danger mt-3 mb-0">@TempData["AssetError"]</div>
+      }
+
+      <form asp-action="AddAsset" asp-route-id="@Model.MaKh" method="post" class="border rounded-3 p-3 mt-3">
+          @Html.AntiForgeryToken()
+          <div class="row g-2">
+              <div class="col-md-4">
+                  <label class="form-label small text-secondary mb-1">Loại tài sản</label>
+                  <input name="LoaiTaiSan" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-3">
+                  <label class="form-label small text-secondary mb-1">Giá trị khai báo</label>
+                  <input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" />
+              </div>
+              <div class="col-md-2">
+                  <label class="form-label small text-secondary mb-1">Tỷ lệ LTV</label>
+                  <input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" />
+              </div>
+              <div class="col-md-3 d-flex align-items-end">
+                  <button class="btn btn-sm btn-primary w-100" type="submit">Thêm tài sản</button>
+              </div>
+              <div class="col-md-6">
+                  <label class="form-label small text-secondary mb-1">Giấy tờ pháp lý</label>
+                  <input name="GiayToPhapLy" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-6">
+                  <label class="form-label small text-secondary mb-1">Mô tả</label>
+                  <input name="MoTa" class="form-control form-control-sm" />
+              </div>
+          </div>
+      </form>
+
+      @{
+          var assets = ViewData["CustomerAssets"] as IEnumerable<BTL_PTTKHDT.Models.TaiSanKhachHang>;
+          var list = assets?.ToList() ?? new List<BTL_PTTKHDT.Models.TaiSanKhachHang>();
+      }
+
+      @if (list.Count == 0)
+      {
+          <div class="text-secondary mt-3">Chưa có tài sản.</div>
+      }
+      else
+      {
+          <div class="table-responsive mt-3">
+              <table class="table table-sm align-middle mb-0">
+                  <thead>
+                      <tr class="text-secondary small">
+                          <th>Mã</th>
+                          <th>Loại</th>
+                          <th class="text-end">Khai báo</th>
+                          <th class="text-end">Định giá</th>
+                          <th class="text-center">LTV</th>
+                          <th class="text-center">Trạng thái</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      @foreach (var ts in list)
+                      {
+                          <tr>
+                              <td class="fw-semibold">@ts.MaTaiSanKh</td>
+                              <td>
+                                  <div class="fw-semibold">@ts.LoaiTaiSan</div>
+                                  @if (!string.IsNullOrWhiteSpace(ts.MoTa))
+                                  {
+                                      <div class="text-secondary small">@ts.MoTa</div>
+                                  }
+                              </td>
+                              <td class="text-end">@ts.GiaTriKhaiBao.ToString("N0")</td>
+                              <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? ts.GiaTriDinhGia.Value.ToString("N0") : "-")</td>
+                              <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
+                              <td class="text-center"><span class="badge text-bg-light">@ts.TrangThai</span></td>
+                          </tr>
+                      }
+                  </tbody>
+              </table>
+          </div>
+      }
+  </div>
 </div>

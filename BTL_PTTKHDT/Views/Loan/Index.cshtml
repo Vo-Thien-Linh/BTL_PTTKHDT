@@ -1,0 +1,410 @@
+@model BTL_PTTKHDT.Models.LoanListViewModel
+
+@{
+    ViewData["Title"] = "Hồ sơ vay vốn";
+
+    int totalPages = Model.TotalPages;
+    if (totalPages < 1) totalPages = 1;
+
+    string StatusLabel(string s) => s switch
+    {
+        "dang-soan"    => "Đang soạn",
+        "cho-checker"  => "Chờ Checker duyệt",
+        "cho-approver" => "Chờ Approver duyệt",
+        "da-duyet"     => "Đã duyệt",
+        "tu-choi"      => "Từ chối",
+        _              => s
+    };
+
+    string StatusClass(string s) => s switch
+    {
+        "dang-soan"    => "loan-status-draft",
+        "cho-checker"  => "loan-status-checker",
+        "cho-approver" => "loan-status-approver",
+        "da-duyet"     => "loan-status-approved",
+        "tu-choi"      => "loan-status-rejected",
+        _              => ""
+    };
+
+    // step state: approved | rejected | pending | inactive
+    string StepClass(string state) => state switch
+    {
+        "approved" => "loan-step-approved",
+        "rejected" => "loan-step-rejected",
+        "pending"  => "loan-step-pending",
+        _          => "loan-step-inactive"
+    };
+
+    string StepIcon(string state) => state switch
+    {
+        "approved" => "<i class=\"bi bi-check-lg\"></i>",
+        "rejected" => "<i class=\"bi bi-x-lg\"></i>",
+        _          => ""
+    };
+
+    bool isAll      = string.IsNullOrWhiteSpace(Model.Status);
+    bool isDraft    = Model.Status == "dang-soan";
+    bool isChecker  = Model.Status == "cho-checker";
+    bool isApprover = Model.Status == "cho-approver";
+    bool isApproved = Model.Status == "da-duyet";
+    bool isRejected = Model.Status == "tu-choi";
+}
+
+@* ── Page Header ── *@
+<div class="d-flex align-items-start justify-content-between mb-2">
+    <div>
+        <h1 class="h4 mb-1 fw-bold">Danh sách Đơn vay</h1>
+        <p class="text-secondary small mb-0">Quản lý và theo dõi tiến trình phê duyệt hồ sơ vay vốn.</p>
+    </div>
+    <a asp-action="Create" id="btn-tao-don-vay" class="btn btn-primary btn-sm px-3">
+        <i class="bi bi-plus-lg me-1"></i> Tạo đơn vay mới
+    </a>
+</div>
+
+@* ── Filter Bar ── *@
+<form method="get" class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    @* Status Filter *@
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1"
+                type="button" id="statusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-funnel"></i>
+            @(isAll ? "Tất cả trạng thái" : StatusLabel(Model.Status!))
+        </button>
+        <ul class="dropdown-menu shadow-sm" aria-labelledby="statusDropdown">
+            <li><a class="dropdown-item @(isAll ? "active" : "")" href="@Url.Action("Index", new { period = Model.Period })">Tất cả trạng thái</a></li>
+            <li><a class="dropdown-item @(isDraft ? "active" : "")" href="@Url.Action("Index", new { status = "dang-soan", period = Model.Period })">Đang soạn</a></li>
+            <li><a class="dropdown-item @(isChecker ? "active" : "")" href="@Url.Action("Index", new { status = "cho-checker", period = Model.Period })">Chờ Checker duyệt</a></li>
+            <li><a class="dropdown-item @(isApprover ? "active" : "")" href="@Url.Action("Index", new { status = "cho-approver", period = Model.Period })">Chờ Approver duyệt</a></li>
+            <li><a class="dropdown-item @(isApproved ? "active" : "")" href="@Url.Action("Index", new { status = "da-duyet", period = Model.Period })">Đã duyệt</a></li>
+            <li><a class="dropdown-item @(isRejected ? "active" : "")" href="@Url.Action("Index", new { status = "tu-choi", period = Model.Period })">Từ chối</a></li>
+        </ul>
+    </div>
+
+    @* Period Filter *@
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1"
+                type="button" id="periodDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-calendar3"></i>
+            @(Model.Period == "week" ? "Tuần này" : Model.Period == "year" ? "Năm này" : "Tháng này")
+        </button>
+        <ul class="dropdown-menu shadow-sm" aria-labelledby="periodDropdown">
+            <li><a class="dropdown-item @(Model.Period == "week" ? "active" : "")" href="@Url.Action("Index", new { status = Model.Status, period = "week" })">Tuần này</a></li>
+            <li><a class="dropdown-item @(Model.Period == null || Model.Period == "month" ? "active" : "")" href="@Url.Action("Index", new { status = Model.Status, period = "month" })">Tháng này</a></li>
+            <li><a class="dropdown-item @(Model.Period == "year" ? "active" : "")" href="@Url.Action("Index", new { status = Model.Status, period = "year" })">Năm này</a></li>
+        </ul>
+    </div>
+
+    @* Search *@
+    <div class="input-group input-group-sm ms-auto" style="width: 260px;">
+        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+        <input name="q" value="@Model.Query" class="form-control"
+               placeholder="Tìm kiếm đơn vay..." id="loan-search-input" />
+    </div>
+
+    @* Count *@
+    <div class="text-secondary small ms-2 text-nowrap">
+        Hiển thị @Model.From-@Model.To của @Model.TotalCount đơn vay
+    </div>
+</form>
+
+@* ── Table Card ── *@
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        @if (Model.Items.Count == 0)
+        {
+            <div class="text-center text-secondary py-5">
+                <i class="bi bi-inbox" style="font-size: 3rem; opacity:.4;"></i>
+                <p class="mt-3 mb-0">Không có đơn vay phù hợp.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table loan-table mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">MÃ ĐƠN</th>
+                            <th>KHÁCH HÀNG</th>
+                            <th>SỐ TIỀN YÊU CẦU</th>
+                            <th>MỤC ĐÍCH VAY</th>
+                            <th>TIẾN TRÌNH PHÊ DUYỆT (M → C → A)</th>
+                            <th>TRẠNG THÁI</th>
+                            <th class="text-center pe-4">THAO TÁC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Items)
+                        {
+                            <tr>
+                                @* Mã đơn *@
+                                <td class="ps-4">
+                                    <span class="loan-ma-don">@row.MaDon</span>
+                                </td>
+
+                                @* Khách hàng *@
+                                <td>
+                                    <div class="loan-kh-name">@row.TenKhachHang</div>
+                                    <div class="loan-kh-sub">
+                                        <span class="text-secondary">@row.NhanDangGiayTo</span>
+                                        @row.SoGiayTo
+                                    </div>
+                                </td>
+
+                                @* Số tiền *@
+                                <td>
+                                    <span class="loan-amount">@row.SoTienYeuCau.ToString("N0") đ</span>
+                                </td>
+
+                                @* Mục đích *@
+                                <td>
+                                    <span class="loan-purpose">@row.MucDichVay</span>
+                                </td>
+
+                                @* Tiến trình M → C → A *@
+                                <td>
+                                    <div class="loan-progress-track">
+                                        <div class="loan-step @StepClass(row.TrangThaiMaker)" title="Maker">
+                                            @Html.Raw(StepIcon(row.TrangThaiMaker))
+                                            @if (string.IsNullOrEmpty(StepIcon(row.TrangThaiMaker)))
+                                            {<text>M</text>}
+                                        </div>
+                                        <div class="loan-connector @(row.TrangThaiMaker == "approved" ? "loan-connector-active" : "")"></div>
+                                        <div class="loan-step @StepClass(row.TrangThaiChecker)" title="Checker">
+                                            @Html.Raw(StepIcon(row.TrangThaiChecker))
+                                            @if (string.IsNullOrEmpty(StepIcon(row.TrangThaiChecker)))
+                                            {<text>C</text>}
+                                        </div>
+                                        <div class="loan-connector @(row.TrangThaiChecker == "approved" ? "loan-connector-active" : "")"></div>
+                                        <div class="loan-step @StepClass(row.TrangThaiApprover)" title="Approver">
+                                            @Html.Raw(StepIcon(row.TrangThaiApprover))
+                                            @if (string.IsNullOrEmpty(StepIcon(row.TrangThaiApprover)))
+                                            {<text>A</text>}
+                                        </div>
+                                    </div>
+                                </td>
+
+                                @* Trạng thái *@
+                                <td>
+                                    <span class="loan-status-badge @StatusClass(row.TrangThaiDon)">
+                                        <span class="loan-status-dot"></span>
+                                        @StatusLabel(row.TrangThaiDon)
+                                    </span>
+                                </td>
+
+                                @* Thao tác *@
+                                <td class="text-center pe-4">
+                                    <a asp-action="Details" asp-route-id="@row.MaDon"
+                                       class="btn btn-sm btn-light loan-action-btn"
+                                       title="Xem chi tiết">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @* ── Pagination Footer ── *@
+    <div class="card-footer bg-white d-flex align-items-center justify-content-between border-top py-3 px-4">
+        <div class="text-secondary small">
+            Trang @Model.Page / @totalPages
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary px-3 @(Model.Page <= 1 ? "disabled" : "")"
+               href="@Url.Action("Index", new { q = Model.Query, status = Model.Status, period = Model.Period, page = Model.Page - 1 })"
+               id="btn-pagination-prev">
+                Trước
+            </a>
+            <a class="btn btn-sm btn-primary px-3 @(Model.Page >= totalPages ? "disabled" : "")"
+               href="@Url.Action("Index", new { q = Model.Query, status = Model.Status, period = Model.Period, page = Model.Page + 1 })"
+               id="btn-pagination-next">
+                Tiếp
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ── Table base ── */
+    .loan-table thead th {
+        font-size: .72rem;
+        font-weight: 600;
+        letter-spacing: .05em;
+        color: #6b7280;
+        background: #f8fafc;
+        border-bottom: 1px solid #e5e7eb;
+        padding: .85rem .75rem;
+        white-space: nowrap;
+    }
+
+    .loan-table tbody tr {
+        border-bottom: 1px solid #f1f5f9;
+        transition: background .15s ease;
+    }
+
+    .loan-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .loan-table tbody tr:hover {
+        background: #f8fafc;
+    }
+
+    .loan-table tbody td {
+        padding: 1rem .75rem;
+        vertical-align: middle;
+    }
+
+    /* ── Cell content ── */
+    .loan-ma-don {
+        font-size: .82rem;
+        font-weight: 600;
+        color: #374151;
+        white-space: nowrap;
+    }
+
+    .loan-kh-name {
+        font-size: .88rem;
+        font-weight: 600;
+        color: #1e293b;
+        max-width: 200px;
+    }
+
+    .loan-kh-sub {
+        font-size: .78rem;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+
+    .loan-amount {
+        font-size: .88rem;
+        font-weight: 600;
+        color: #1e293b;
+        white-space: nowrap;
+    }
+
+    .loan-purpose {
+        font-size: .85rem;
+        color: #374151;
+        max-width: 160px;
+        display: block;
+    }
+
+    /* ── Approval progress track ── */
+    .loan-progress-track {
+        display: flex;
+        align-items: center;
+        gap: 0;
+    }
+
+    .loan-step {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 700;
+        flex-shrink: 0;
+        transition: all .2s ease;
+    }
+
+    .loan-step-inactive {
+        background: #f1f5f9;
+        color: #9ca3af;
+        border: 1.5px solid #e2e8f0;
+    }
+
+    .loan-step-pending {
+        background: #eff6ff;
+        color: #3b82f6;
+        border: 2px solid #3b82f6;
+    }
+
+    .loan-step-approved {
+        background: #1e40af;
+        color: #fff;
+        border: 2px solid #1e40af;
+    }
+
+    .loan-step-rejected {
+        background: #fef2f2;
+        color: #ef4444;
+        border: 2px solid #ef4444;
+    }
+
+    .loan-connector {
+        width: 28px;
+        height: 2px;
+        background: #e2e8f0;
+        flex-shrink: 0;
+    }
+
+    .loan-connector-active {
+        background: #1e40af;
+    }
+
+    /* ── Status badge ── */
+    .loan-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .78rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .loan-status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: .85;
+        flex-shrink: 0;
+    }
+
+    .loan-status-draft {
+        background: #f1f5f9;
+        color: #64748b;
+    }
+
+    .loan-status-checker {
+        background: #fffbeb;
+        color: #d97706;
+    }
+
+    .loan-status-approver {
+        background: #eff6ff;
+        color: #2563eb;
+    }
+
+    .loan-status-approved {
+        background: #f0fdf4;
+        color: #16a34a;
+    }
+
+    .loan-status-rejected {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+
+    /* ── Action button ── */
+    .loan-action-btn {
+        padding: 5px 10px;
+        border-radius: 8px;
+        color: #6b7280;
+        transition: all .2s ease;
+    }
+
+    .loan-action-btn:hover {
+        background: #e0f2fe;
+        color: #0284c7;
+        border-color: #bae6fd;
+    }
+</style>
