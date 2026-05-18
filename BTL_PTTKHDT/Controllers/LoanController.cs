@@ -1,4 +1,5 @@
-using BTL_PTTKHDT.Models;
+﻿using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -8,10 +9,12 @@ namespace BTL_PTTKHDT.Controllers;
 public class LoanController : Controller
 {
     private readonly QltdnhContext _db;
+    private readonly ICreditScoreService _creditScoreService;
 
-    public LoanController(QltdnhContext db)
+    public LoanController(QltdnhContext db, ICreditScoreService creditScoreService)
     {
         _db = db;
+        _creditScoreService = creditScoreService;
     }
 
     private const int PageSize = 10;
@@ -35,11 +38,11 @@ public class LoanController : Controller
         }
 
         if (status is "dang-soan")
-            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Dang soan");
+            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Đang soạn");
         else if (status is "da-duyet")
-            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Da duyet");
+            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Đã duyệt");
         else if (status is "tu-choi")
-            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Tu choi");
+            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Từ chối");
 
         var allForFilter = await baseQuery
             .OrderByDescending(x => x.NgayTao)
@@ -120,6 +123,14 @@ public class LoanController : Controller
             ModelState.Remove(nameof(LoanCreateViewModel.TenKhachHang));
             ModelState.Remove(nameof(LoanCreateViewModel.SoGiayTo));
             ModelState.Remove(nameof(LoanCreateViewModel.LoaiKhachHang));
+
+            var activeCustomerLoan = await GetActiveCustomerLoanAsync(customer.MaKh, exceptLoanApplicationId: null, cancellationToken);
+            if (activeCustomerLoan != null)
+            {
+                ModelState.AddModelError(
+                    nameof(LoanCreateViewModel.MaKh),
+                    $"Khách hàng đang có khoản vay {activeCustomerLoan.MaVay} chưa tất toán, dư nợ gốc {FormatMoney(activeCustomerLoan.DuNoGoc)}. Chỉ có thể tạo đơn vay mới sau khi khách hàng trả xong khoản vay hiện tại.");
+            }
         }
 
         if (!ModelState.IsValid)
@@ -139,7 +150,7 @@ public class LoanController : Controller
             KyHanDeNghi = model.KyHanDeNghi,
             LaiSuatDeNghi = model.LaiSuatDeNghi,
             NgayNopDon = DateOnly.FromDateTime(now),
-            TrangThaiDon = "Cho duyet",
+            TrangThaiDon = "Chờ duyệt",
             GhiChu = model.GhiChu,
             NgayTao = now,
             NgayCapNhat = now
@@ -151,30 +162,136 @@ public class LoanController : Controller
             MaDon = maDon,
             MaNv = actor!,
             CapPheDuyet = 1,
-            TrangThai = "Da duyet",
+            TrangThai = "Đã duyệt",
             NgayXuLy = now,
             GhiChu = null
         });
 
         _db.DonVays.Add(newDon);
         await _db.SaveChangesAsync(cancellationToken);
+        await _creditScoreService.RecalculateAsync(customer.MaKh, "Tạo đơn vay", cancellationToken);
         return RedirectToAction(nameof(Index));
+    }
+
+    public async Task<IActionResult> Edit(string? id, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+        var don = await _db.DonVays
+            .AsNoTracking()
+            .Include(x => x.MaKhNavigation)
+            .FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
+
+        if (don == null) return NotFound();
+
+        var model = new LoanCreateViewModel
+        {
+            MaKh = don.MaKh,
+            TenKhachHang = don.MaKhNavigation.HoTen,
+            LoaiKhachHang = MapCustomerTypeKind(don.MaKhNavigation.LoaiKhachHang),
+            SoGiayTo = don.MaKhNavigation.CmndCccd,
+            SoTienYeuCau = don.SoTienYeuCau,
+            KyHanDeNghi = don.KyHanDeNghi,
+            LaiSuatDeNghi = don.LaiSuatDeNghi,
+            MucDichVay = don.MucDichVay,
+            GhiChu = don.GhiChu
+        };
+
+        ViewData["MaDon"] = don.MaDon;
+        ViewData["TrangThaiDon"] = don.TrangThaiDon;
+        return View(model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(string id, LoanCreateViewModel model, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+        var don = await _db.DonVays.FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
+        if (don == null) return NotFound();
+
+        var hasDisbursedLoan = await _db.KhoanVays.AsNoTracking().AnyAsync(x => x.MaDon == id, cancellationToken);
+        if (hasDisbursedLoan)
+        {
+            ModelState.AddModelError(string.Empty, "Don vay da giai ngan khong the sua thong tin.");
+        }
+
+        var customer = await _db.KhachHangs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.MaKh == don.MaKh, cancellationToken);
+
+        if (customer == null)
+        {
+            ModelState.AddModelError(string.Empty, "Khong tim thay khach hang cua don vay.");
+        }
+        else
+        {
+            model.MaKh = customer.MaKh;
+            model.TenKhachHang = customer.HoTen;
+            model.SoGiayTo = customer.CmndCccd;
+            model.LoaiKhachHang = MapCustomerTypeKind(customer.LoaiKhachHang);
+
+            ModelState.Remove(nameof(LoanCreateViewModel.MaKh));
+            ModelState.Remove(nameof(LoanCreateViewModel.TenKhachHang));
+            ModelState.Remove(nameof(LoanCreateViewModel.SoGiayTo));
+            ModelState.Remove(nameof(LoanCreateViewModel.LoaiKhachHang));
+        }
+
+        if (!ModelState.IsValid)
+        {
+            ViewData["MaDon"] = id;
+            ViewData["TrangThaiDon"] = don.TrangThaiDon;
+            return View(model);
+        }
+
+        don.SoTienYeuCau = model.SoTienYeuCau;
+        don.KyHanDeNghi = model.KyHanDeNghi;
+        don.LaiSuatDeNghi = model.LaiSuatDeNghi;
+        don.MucDichVay = model.MucDichVay.Trim();
+        don.GhiChu = model.GhiChu;
+        don.NgayCapNhat = DateTime.Now;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     public async Task<IActionResult> Details(string? id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
+        var vm = await BuildLoanDetailViewModelAsync(id, cancellationToken);
+        if (vm == null) return NotFound();
+
+        ViewData["CollateralCreate"] = new LoanCollateralCreateViewModel();
+        ViewData["CollateralValuation"] = new LoanCollateralValuationViewModel();
+        return View(vm);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> AppraisalPdf(string id, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+        var vm = await BuildLoanDetailViewModelAsync(id, cancellationToken);
+        if (vm == null) return NotFound();
+
+        var bytes = LoanAppraisalPdfService.Build(vm);
+        var fileName = $"Bao-cao-tham-dinh-{vm.Loan.MaDon}.pdf";
+        return File(bytes, "application/pdf", fileName);
+    }
+
+    private async Task<LoanDetailViewModel?> BuildLoanDetailViewModelAsync(string id, CancellationToken cancellationToken)
+    {
         var don = await _db.DonVays
             .AsNoTracking()
             .Include(x => x.MaKhNavigation)
             .Include(x => x.QuyTrinhPheDuyets)
             .FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
 
-        if (don == null) return NotFound();
+        if (don == null) return null;
 
         var taiSan = await _db.TaiSanKhachHangs
             .AsNoTracking()
-            .Where(x => x.MaKh == don.MaKh)
+            .Where(x => x.MaKh == don.MaKh && x.TrangThaiSoHuu == "Đang sở hữu")
             .OrderByDescending(x => x.GiaTriDinhGia ?? x.GiaTriKhaiBao)
             .ToListAsync(cancellationToken);
 
@@ -188,17 +305,22 @@ public class LoanController : Controller
             GiaTriDinhGia = x.GiaTriDinhGia,
             TyLeLtv = x.TyLeLtv,
             TrangThai = x.TrangThai,
+            TrangThaiSoHuu = x.TrangThaiSoHuu,
             MoTa = x.MoTa,
-            GiayToPhapLy = x.GiayToPhapLy
+            GiayToPhapLy = x.GiayToPhapLy,
+            NgayKhaiBao = x.NgayKhaiBao,
+            NgayDinhGia = x.NgayDinhGia
         }).ToList();
 
         var (tongGiaTri, hanMuc) = CalculateCollateralKpis(taiSanVm);
         var ltv = tongGiaTri <= 0 ? 0m : loanRow.SoTienYeuCau / tongGiaTri;
         var steps = BuildApprovalSteps(don.QuyTrinhPheDuyets, loanRow);
+        var appraisal = await BuildAppraisalReportAsync(don, loanRow, tongGiaTri, hanMuc, ltv, cancellationToken);
 
-        var vm = new LoanDetailViewModel
+        return new LoanDetailViewModel
         {
             Loan = loanRow,
+            ThamDinh = appraisal,
             KyHanDeNghi = don.KyHanDeNghi,
             LaiSuatDeNghi = don.LaiSuatDeNghi,
             NgayNopDon = don.NgayNopDon,
@@ -209,10 +331,82 @@ public class LoanController : Controller
             HanMucGoiY = hanMuc,
             TyLeLtv = ltv
         };
+    }
 
-        ViewData["CollateralCreate"] = new LoanCollateralCreateViewModel();
-        ViewData["CollateralValuation"] = new LoanCollateralValuationViewModel();
-        return View(vm);
+    private async Task<LoanAppraisalReportViewModel> BuildAppraisalReportAsync(
+        DonVay don,
+        LoanRowViewModel loanRow,
+        decimal tongGiaTriDamBao,
+        decimal hanMucGoiY,
+        decimal tyLeLtv,
+        CancellationToken cancellationToken)
+    {
+        var customer = don.MaKhNavigation;
+
+        var latestCredit = await _db.LichSuTinDungs
+            .AsNoTracking()
+            .Where(x => x.MaKh == don.MaKh)
+            .OrderByDescending(x => x.NgayCapNhat)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var creditLimit = await _db.HanMucTinDungs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.MaKh == don.MaKh, cancellationToken);
+
+        var activeLoans = await _db.KhoanVays
+            .AsNoTracking()
+            .Where(x =>
+                x.MaKh == don.MaKh
+                && x.DuNoGoc > 0
+                && x.TrangThai != "Đã trả hết"
+                && x.TrangThai != "Xóa nợ")
+            .ToListAsync(cancellationToken);
+
+        var tongDuNo = activeLoans.Sum(x => x.DuNoGoc);
+        var nhomNoCaoNhat = activeLoans.Select(x => x.NhomNo).DefaultIfEmpty((byte)1).Max();
+        var coNoQuaHan = activeLoans.Any(x => x.TrangThai == "Quá hạn" || x.NhomNo >= 2);
+
+        return new LoanAppraisalReportViewModel
+        {
+            MaKh = customer.MaKh,
+            HoTen = customer.HoTen,
+            LoaiKhachHang = customer.LoaiKhachHang,
+            NgaySinh = customer.NgaySinh,
+            CmndCccd = customer.CmndCccd,
+            DiaChi = customer.DiaChi,
+            SoDienThoai = customer.SoDienThoai,
+            Email = customer.Email,
+            IsActive = customer.IsActive,
+            MaSoThue = customer.MaSoThue,
+            TenNguoiDaiDien = customer.TenNguoiDaiDien,
+            ChucVuNguoiDaiDien = customer.ChucVuNguoiDaiDien,
+            NgayThanhLap = customer.NgayThanhLap,
+            LinhVucKinhDoanh = customer.LinhVucKinhDoanh,
+            DoanhThuBinhQuanThang = customer.DoanhThuBinhQuanThang,
+            LoiNhuanBinhQuanThang = customer.LoiNhuanBinhQuanThang,
+            SoLaoDong = customer.SoLaoDong,
+            DiemTinDung = latestCredit?.DiemTinDung,
+            XepHangRuiRo = latestCredit?.XepHangRuiRo,
+            SoLanTraTre = latestCredit?.SoLanTraTre ?? 0,
+            ThuNhapHangThang = latestCredit?.ThuNhapHangThang,
+            TyLeNoThuNhap = latestCredit?.TyLeNoThuNhap,
+            GhiChuTinDung = latestCredit?.GhiChu,
+            NgayCapNhatTinDung = latestCredit?.NgayCapNhat,
+            NguonCapNhatTinDung = latestCredit?.NguonCapNhat,
+            TongDuNoGocHienTai = tongDuNo,
+            SoKhoanVayDangHoatDong = activeLoans.Count,
+            NhomNoCaoNhat = nhomNoCaoNhat,
+            CoNoQuaHan = coNoQuaHan,
+            CoNoXau = activeLoans.Any(x => x.NhomNo >= 3),
+            SoTienYeuCau = loanRow.SoTienYeuCau,
+            TongGiaTriDamBao = tongGiaTriDamBao,
+            HanMucGoiY = hanMucGoiY,
+            TyLeLtv = tyLeLtv,
+            HanMucToiDa = creditLimit?.HanMucToiDa,
+            HanMucDaSuDung = creditLimit?.HanMucDaSuDung,
+            HanMucConLai = creditLimit?.HanMucConLai,
+            NgayCapNhatHanMuc = creditLimit?.NgayCapNhat
+        };
     }
 
     [HttpPost]
@@ -230,12 +424,12 @@ public class LoanController : Controller
 
         if (string.IsNullOrWhiteSpace(loaiTaiSanRaw))
         {
-            TempData["CollateralError"] = "Loại tài sản không được để trống.";
+            TempData["CollateralError"] = "Loai tai san không được để trống.";
             return RedirectToAction(nameof(Details), new { id });
         }
         if (loaiTaiSanRaw.Length > 100)
         {
-            TempData["CollateralError"] = "Loại tài sản không được vượt quá 100 ký tự.";
+            TempData["CollateralError"] = "Loai tai san không được vượt quá 100 ký tự.";
             return RedirectToAction(nameof(Details), new { id });
         }
         if (!TryParseFlexibleDecimal(giaTriKhaiBaoRaw, out var giaTriKhaiBao) || giaTriKhaiBao <= 0)
@@ -250,7 +444,7 @@ public class LoanController : Controller
         }
         if (!string.IsNullOrWhiteSpace(giayToPhapLyRaw) && giayToPhapLyRaw.Length > 500)
         {
-            TempData["CollateralError"] = "Giấy tờ pháp lý không được vượt quá 500 ký tự.";
+            TempData["CollateralError"] = "Giay to phap ly không được vượt quá 500 ký tự.";
             return RedirectToAction(nameof(Details), new { id });
         }
         if (!string.IsNullOrWhiteSpace(moTaRaw) && moTaRaw.Length > 500)
@@ -273,7 +467,10 @@ public class LoanController : Controller
             NgayKhaiBao = DateOnly.FromDateTime(DateTime.Now),
             NgayDinhGia = null,
             MaNvdinhGia = null,
-            TrangThai = "Chua dinh gia"
+            TrangThai = "Chưa định giá",
+            TrangThaiSoHuu = "Đang sở hữu",
+            NgayBan = null,
+            GhiChuSoHuu = null
         };
 
         _db.TaiSanKhachHangs.Add(entity);
@@ -308,11 +505,118 @@ public class LoanController : Controller
         var actor = await GetDefaultEmployeeIdAsync(cancellationToken);
         asset.GiaTriDinhGia = giaTriDinhGia;
         asset.NgayDinhGia = DateOnly.FromDateTime(DateTime.Now);
-        asset.TrangThai = "Da dinh gia";
+        asset.TrangThai = "Đã định giá";
         asset.MaNvdinhGia = actor;
 
         await _db.SaveChangesAsync(cancellationToken);
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditCollateral(string id, CancellationToken cancellationToken = default)
+    {
+        var don = await _db.DonVays.AsNoTracking().FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
+        if (don == null) return NotFound();
+
+        var maTaiSanKh = Request.Form["MaTaiSanKh"].ToString().Trim();
+        var asset = await _db.TaiSanKhachHangs.FirstOrDefaultAsync(x => x.MaTaiSanKh == maTaiSanKh && x.MaKh == don.MaKh, cancellationToken);
+        if (asset == null) return RedirectToAction(nameof(Details), new { id });
+
+        if (await IsCollateralPledgedAsync(maTaiSanKh, cancellationToken))
+        {
+            TempData["CollateralError"] = "Tài sản đã được thế chấp cho khoản vay, không thể sửa trực tiếp.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var loaiTaiSan = Request.Form["LoaiTaiSan"].ToString().Trim();
+        var giaTriKhaiBaoRaw = Request.Form["GiaTriKhaiBao"].ToString();
+        var tyLeLtvRaw = Request.Form["TyLeLtv"].ToString();
+        var giayToPhapLy = Request.Form["GiayToPhapLy"].ToString().Trim();
+        var moTa = Request.Form["MoTa"].ToString().Trim();
+
+        if (string.IsNullOrWhiteSpace(loaiTaiSan))
+        {
+            TempData["CollateralError"] = "Loai tai san không được để trống.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        if (loaiTaiSan.Length > 100)
+        {
+            TempData["CollateralError"] = "Loai tai san không được vượt quá 100 ký tự.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        if (!TryParseFlexibleDecimal(giaTriKhaiBaoRaw, out var giaTriKhaiBao) || giaTriKhaiBao <= 0)
+        {
+            TempData["CollateralError"] = "Giá trị khai báo phải là số và lớn hơn 0.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        if (!TryParseFlexibleDouble(tyLeLtvRaw, out var tyLeLtv) || tyLeLtv <= 0 || tyLeLtv > 1)
+        {
+            TempData["CollateralError"] = "Tỷ lệ LTV phải là số trong khoảng (0, 1].";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        if (giayToPhapLy.Length > 500 || moTa.Length > 500)
+        {
+            TempData["CollateralError"] = "Giay to phap ly hoặc mô tả không được vượt quá 500 ký tự.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        asset.LoaiTaiSan = loaiTaiSan;
+        asset.GiaTriKhaiBao = giaTriKhaiBao;
+        asset.TyLeLtv = tyLeLtv;
+        asset.GiayToPhapLy = string.IsNullOrWhiteSpace(giayToPhapLy) ? null : giayToPhapLy;
+        asset.MoTa = string.IsNullOrWhiteSpace(moTa) ? null : moTa;
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteCollateral(string id, string maTaiSanKh, CancellationToken cancellationToken = default)
+    {
+        var don = await _db.DonVays.AsNoTracking().FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
+        if (don == null) return NotFound();
+
+        var asset = await _db.TaiSanKhachHangs.FirstOrDefaultAsync(x => x.MaTaiSanKh == maTaiSanKh && x.MaKh == don.MaKh, cancellationToken);
+        if (asset == null) return RedirectToAction(nameof(Details), new { id });
+
+        if (await IsCollateralPledgedAsync(maTaiSanKh, cancellationToken))
+        {
+            TempData["CollateralError"] = "Tài sản đã được thế chấp cho khoản vay, không thể xóa. Cần xử lý giải chấp trước.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var hasCollateralHistory = await _db.TaiSanTheChaps
+            .AsNoTracking()
+            .AnyAsync(x => x.MaTaiSanKh == maTaiSanKh, cancellationToken);
+        if (hasCollateralHistory)
+        {
+            TempData["CollateralError"] = "Tài sản đã có lịch sử thế chấp nên không thể xóa khỏi hệ thống. Hãy cập nhật trạng thái sở hữu ở hồ sơ khách hàng nếu tài sản không còn thuộc khách hàng.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        try
+        {
+            _db.TaiSanKhachHangs.Remove(asset);
+            await _db.SaveChangesAsync(cancellationToken);
+            TempData["CollateralSuccess"] = "Da xoa tai san khoi ho so.";
+        }
+        catch (DbUpdateException)
+        {
+            TempData["CollateralError"] = "Khong the xoa tai san vi dang duoc tham chieu boi du lieu nghiep vu.";
+        }
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private async Task<bool> IsCollateralPledgedAsync(string maTaiSanKh, CancellationToken cancellationToken)
+    {
+        return await _db.TaiSanTheChaps
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.MaTaiSanKh == maTaiSanKh
+                && (x.TrangThai == "Đang thế chấp" || x.TrangThai == "Xử lý"),
+                cancellationToken);
     }
 
     private static bool TryParseFlexibleDecimal(string? input, out decimal value)
@@ -386,7 +690,7 @@ public class LoanController : Controller
                 MaDon = don.MaDon,
                 MaNv = actor,
                 CapPheDuyet = (byte)cap,
-                TrangThai = "Cho duyet",
+                TrangThai = "Chờ duyệt",
                 NgayXuLy = now,
                 GhiChu = note
             };
@@ -396,23 +700,23 @@ public class LoanController : Controller
         if (normalizedDecision == "reject")
         {
             existing.MaNv = actor;
-            existing.TrangThai = "Tu choi";
+            existing.TrangThai = "Từ chối";
             existing.NgayXuLy = now;
             existing.GhiChu = note;
-            don.TrangThaiDon = "Tu choi";
+            don.TrangThaiDon = "Từ chối";
             don.NgayCapNhat = now;
             await _db.SaveChangesAsync(cancellationToken);
             return RedirectToAction(nameof(Details), new { id });
         }
 
         existing.MaNv = actor;
-        existing.TrangThai = "Da duyet";
+        existing.TrangThai = "Đã duyệt";
         existing.NgayXuLy = now;
         existing.GhiChu = note;
 
         if (cap == 1)
         {
-            don.TrangThaiDon = "Cho duyet";
+            don.TrangThaiDon = "Chờ duyệt";
             don.NgayCapNhat = now;
             await _db.SaveChangesAsync(cancellationToken);
             return RedirectToAction(nameof(Details), new { id });
@@ -420,13 +724,13 @@ public class LoanController : Controller
 
         if (cap == 2)
         {
-            don.TrangThaiDon = "Cho duyet";
+            don.TrangThaiDon = "Chờ duyệt";
             don.NgayCapNhat = now;
             await _db.SaveChangesAsync(cancellationToken);
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        don.TrangThaiDon = "Da duyet";
+        don.TrangThaiDon = "Đã duyệt";
         don.NgayCapNhat = now;
         await _db.SaveChangesAsync(cancellationToken);
         return RedirectToAction(nameof(Details), new { id });
@@ -463,8 +767,8 @@ public class LoanController : Controller
         {
             var t = r.TrangThai switch
             {
-                "Da duyet" => "Đã duyệt",
-                "Tu choi" => "Từ chối",
+                "Đã duyệt" => "Đã duyệt",
+                "Từ chối" => "Từ chối",
                 _ => "Chờ duyệt"
             };
 
@@ -485,9 +789,9 @@ public class LoanController : Controller
 
         return new[]
         {
-            r1 != null ? MakeFromRecord(r1, "Maker") : MakeDefault(1, "Maker", row.TrangThaiMaker),
-            r2 != null ? MakeFromRecord(r2, "Checker") : MakeDefault(2, "Checker", row.TrangThaiChecker),
-            r3 != null ? MakeFromRecord(r3, "Approver") : MakeDefault(3, "Approver", row.TrangThaiApprover)
+            r1 != null ? MakeFromRecord(r1, "Tạo đơn") : MakeDefault(1, "Tạo đơn", row.TrangThaiMaker),
+            r2 != null ? MakeFromRecord(r2, "Kiểm tra") : MakeDefault(2, "Kiểm tra", row.TrangThaiChecker),
+            r3 != null ? MakeFromRecord(r3, "Phê duyệt") : MakeDefault(3, "Phê duyệt", row.TrangThaiApprover)
         };
     }
 
@@ -498,8 +802,8 @@ public class LoanController : Controller
             if (r == null) return "missing";
             return r.TrangThai switch
             {
-                "Da duyet" => "approved",
-                "Tu choi" => "rejected",
+                "Đã duyệt" => "approved",
+                "Từ chối" => "rejected",
                 _ => "pending"
             };
         }
@@ -512,10 +816,10 @@ public class LoanController : Controller
 
     private static string ComputeStageSlug(string trangThaiDonDb, string maker, string checker, string approver)
     {
-        if (trangThaiDonDb == "Da duyet") return "da-duyet";
-        if (trangThaiDonDb == "Tu choi") return "tu-choi";
-        if (trangThaiDonDb == "Da huy") return "da-huy";
-        if (trangThaiDonDb == "Dang soan") return "dang-soan";
+        if (trangThaiDonDb == "Đã duyệt") return "da-duyet";
+        if (trangThaiDonDb == "Từ chối") return "tu-choi";
+        if (trangThaiDonDb == "Đã hủy") return "da-huy";
+        if (trangThaiDonDb == "Đang soạn") return "dang-soan";
 
         if (maker == "approved" && checker != "approved") return "cho-checker";
         if (maker == "approved" && checker == "approved" && approver != "approved") return "cho-approver";
@@ -537,7 +841,7 @@ public class LoanController : Controller
             : approver;
 
         var stageSlug = ComputeStageSlug(don.TrangThaiDon, makerState, checkerState, approverState);
-        if (don.TrangThaiDon == "Tu choi")
+        if (don.TrangThaiDon == "Từ chối")
         {
             if (makerState != "rejected" && checkerState != "rejected" && approverState != "rejected")
             {
@@ -626,130 +930,33 @@ public class LoanController : Controller
         return (maxId, maxId + 1);
     }
 
+    private sealed record ActiveCustomerLoanInfo(string MaVay, decimal DuNoGoc, string TrangThai);
+
+    private async Task<ActiveCustomerLoanInfo?> GetActiveCustomerLoanAsync(string maKh, string? exceptLoanApplicationId, CancellationToken cancellationToken)
+    {
+        return await _db.KhoanVays
+            .AsNoTracking()
+            .Where(x =>
+                x.MaKh == maKh
+                && (exceptLoanApplicationId == null || x.MaDon != exceptLoanApplicationId)
+                && x.DuNoGoc > 0
+                && x.TrangThai != "Đã trả hết"
+                && x.TrangThai != "Xóa nợ")
+            .OrderByDescending(x => x.NgayGiaiNgan)
+            .Select(x => new ActiveCustomerLoanInfo(x.MaVay, x.DuNoGoc, x.TrangThai))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private static string FormatMoney(decimal value)
+    {
+        return value.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Disburse(string id, CancellationToken cancellationToken = default)
+    public IActionResult Disburse(string id)
     {
-        if (string.IsNullOrWhiteSpace(id)) return NotFound();
-
-        var don = await _db.DonVays
-            .Include(x => x.KhoanVays)
-            .FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
-        if (don == null) return NotFound();
-
-        if (don.TrangThaiDon != "Da duyet")
-        {
-            TempData["DisburseError"] = "Chỉ được giải ngân khi hồ sơ đã được duyệt (Approver).";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var existingLoan = await _db.KhoanVays.AsNoTracking().FirstOrDefaultAsync(x => x.MaDon == don.MaDon, cancellationToken);
-        if (existingLoan != null)
-        {
-            return RedirectToAction("Details", "Debt", new { id = existingLoan.MaVay });
-        }
-
-        var assets = await _db.TaiSanKhachHangs
-            .Where(x => x.MaKh == don.MaKh)
-            .ToListAsync(cancellationToken);
-        if (assets.Count == 0)
-        {
-            TempData["DisburseError"] = "Cần có ít nhất 1 tài sản đảm bảo trước khi giải ngân.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var now = DateTime.Now;
-        var actor = await GetDefaultEmployeeIdAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(actor))
-        {
-            TempData["DisburseError"] = "Chưa có nhân viên để ghi nhận giải ngân.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var maVay = await GetNextKhoanVayCodeAsync(cancellationToken);
-        var ngayGiaiNgan = DateOnly.FromDateTime(now);
-        var kyHan = don.KyHanDeNghi;
-        var ngayDaoHan = ngayGiaiNgan.AddMonths(kyHan);
-        var laiSuat = don.LaiSuatDeNghi ?? 12d;
-        var soTienVay = don.SoTienYeuCau;
-
-        var kv = new KhoanVay
-        {
-            MaVay = maVay,
-            MaDon = don.MaDon,
-            MaKh = don.MaKh,
-            SoTienVay = soTienVay,
-            LaiSuat = laiSuat,
-            KyHan = kyHan,
-            PhuongThucTraNo = "Goc lai deu",
-            NgayGiaiNgan = ngayGiaiNgan,
-            NgayDaoHan = ngayDaoHan,
-            DuNoGoc = soTienVay,
-            TrangThai = "Dang vay",
-            NhomNo = 1,
-            NgayCapNhatNhom = ngayGiaiNgan,
-            GhiChu = null,
-            NgayTao = now
-        };
-
-        var hd = new HopDongTinDung
-        {
-            MaHopDong = await GetNextHopDongCodeAsync(cancellationToken),
-            MaVay = maVay,
-            MaNv = actor,
-            NgayKyHopDong = ngayGiaiNgan,
-            NoiDung = null,
-            DieuKhoan = null,
-            FileUrl = null,
-            NgayTao = now
-        };
-
-        var (tscStart, tscNext) = await GetNextTaiSanTheChapSuffixAsync(cancellationToken);
-        foreach (var a in assets)
-        {
-            var baseValue = a.GiaTriDinhGia ?? a.GiaTriKhaiBao;
-            var tsc = new TaiSanTheChap
-            {
-                MaTaiSan = $"TSC{tscNext:0000}",
-                MaVay = maVay,
-                MaTaiSanKh = a.MaTaiSanKh,
-                GiaTriTheChap = baseValue,
-                NgayTheChap = ngayGiaiNgan,
-                NgayGiaiChap = null,
-                TrangThai = "Dang the chap",
-                GhiChu = null
-            };
-            tscNext++;
-
-            a.TrangThai = "Da the chap";
-            _db.TaiSanTheChaps.Add(tsc);
-        }
-
-        var (ltStart, ltNext) = await GetNextLichTraNoSuffixAsync(cancellationToken);
-        foreach (var row in BuildScheduleGocLaiDeu(soTienVay, laiSuat, kyHan, ngayGiaiNgan))
-        {
-            var ltn = new LichTraNo
-            {
-                MaLichTraNo = $"LTN{ltNext:0000}",
-                MaVay = maVay,
-                KyThu = row.kyThu,
-                NgayPhaiTra = row.ngayPhaiTra,
-                SoTienGoc = row.goc,
-                SoTienLai = row.lai,
-                SoTienDaThanhToan = 0m,
-                TrangThai = "Chua tra",
-                NgayThanhToanThucTe = null,
-                GhiChu = null
-            };
-            ltNext++;
-            _db.LichTraNos.Add(ltn);
-        }
-
-        _db.KhoanVays.Add(kv);
-        _db.HopDongTinDungs.Add(hd);
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return RedirectToAction("Details", "Debt", new { id = maVay });
+        return RedirectToAction("Details", "Disbursement", new { id });
     }
 
     private static IEnumerable<(int kyThu, DateOnly ngayPhaiTra, decimal goc, decimal lai)> BuildScheduleGocLaiDeu(decimal principal, double annualRatePercent, int termMonths, DateOnly disburseDate)
@@ -808,7 +1015,7 @@ public class LoanController : Controller
     // ──────────────────────────────────────────────
 
     /// <summary>
-    /// Tìm kiếm và lọc hồ sơ vay — trả JSON cho AJAX.
+    /// Tim kiếm và lọc hồ sơ vay — trả JSON cho AJAX.
     /// GET /api/loans/search?q=&amp;status=&amp;page=1&amp;pageSize=10
     /// </summary>
     [HttpGet("/api/loans/search")]
@@ -832,11 +1039,11 @@ public class LoanController : Controller
         }
 
         if (status is "dang-soan")
-            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Dang soan");
+            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Đang soạn");
         else if (status is "da-duyet")
-            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Da duyet");
+            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Đã duyệt");
         else if (status is "tu-choi")
-            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Tu choi");
+            baseQuery = baseQuery.Where(x => x.TrangThaiDon == "Từ chối");
 
         var allForFilter = await baseQuery
             .OrderByDescending(x => x.NgayTao)
@@ -880,7 +1087,7 @@ public class LoanController : Controller
     }
 
     /// <summary>
-    /// Lấy chi tiết 1 hồ sơ vay theo mã đơn — trả JSON.
+    /// Lấy chi tiết 1 hồ sơ vay theo mã đơn - trả JSON.
     /// GET /api/loans/{id}/detail
     /// </summary>
     [HttpGet("/api/loans/{id}/detail")]

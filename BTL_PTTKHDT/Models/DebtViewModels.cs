@@ -12,6 +12,7 @@ public sealed class DebtLoanRowViewModel
     public decimal DuNoGoc { get; init; }
     public int KyHan { get; init; }
     public double LaiSuat { get; init; }
+    public byte NhomNo { get; init; }
     public DateOnly NgayGiaiNgan { get; init; }
     public string TrangThai { get; init; } = string.Empty;
 }
@@ -37,6 +38,8 @@ public sealed class DebtScheduleRowViewModel
     public decimal SoTienLai { get; init; }
     public decimal SoTienDaThanhToan { get; init; }
     public required string TrangThai { get; init; }
+    public int DaysOverdue { get; init; }
+    public bool WasPaidLate { get; init; }
 }
 
 public sealed class DebtCollateralRowViewModel
@@ -60,11 +63,11 @@ public sealed class DebtPaymentCreateViewModel
     [Required]
     public string MaLichTraNo { get; set; } = string.Empty;
 
-    [Range(typeof(decimal), "1", "999999999999999", ErrorMessage = "Số tiền thanh toán phải lớn hơn 0.")]
+    [Range(typeof(decimal), "1", "999999999999999", ErrorMessage = "So tien thanh toán phải lớn hơn 0.")]
     public decimal SoTienThanhToan { get; set; }
 
     [StringLength(30)]
-    public string HinhThuc { get; set; } = "Tien mat";
+    public string HinhThuc { get; set; } = "Tiền mặt";
 
     [StringLength(255)]
     public string? GhiChu { get; set; }

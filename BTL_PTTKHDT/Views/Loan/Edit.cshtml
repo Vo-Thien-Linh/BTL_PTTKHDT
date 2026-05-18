@@ -1,0 +1,123 @@
+@model BTL_PTTKHDT.Models.LoanCreateViewModel
+@{
+    var maDon = ViewData["MaDon"]?.ToString() ?? string.Empty;
+    var initialAmount = Model.SoTienYeuCau > 0
+        ? Model.SoTienYeuCau.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))
+        : string.Empty;
+    ViewData["Title"] = $"Sửa đơn vay {maDon}";
+}
+
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="h4 mb-1">@ViewData["Title"]</h2>
+            <div class="text-secondary small">Cập nhật thông tin đề nghị vay trước khi giải ngân.</div>
+        </div>
+        <a asp-action="Details" asp-route-id="@maDon" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Chi tiết
+        </a>
+    </div>
+
+    <div class="card p-3">
+        <form asp-action="Edit" asp-route-id="@maDon" method="post">
+            <div asp-validation-summary="All" class="text-danger mb-3 font-weight-bold"></div>
+
+            <input asp-for="MaKh" type="hidden" />
+            <input asp-for="TenKhachHang" type="hidden" />
+            <input asp-for="LoaiKhachHang" type="hidden" />
+            <input asp-for="SoGiayTo" type="hidden" />
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Mã khách hàng</label>
+                    <input class="form-control" value="@Model.MaKh" readonly />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tên khách hàng</label>
+                    <input class="form-control" value="@Model.TenKhachHang" readonly />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Số giấy tờ</label>
+                    <input class="form-control" value="@Model.SoGiayTo" readonly />
+                </div>
+            </div>
+
+            <hr class="my-4" />
+
+            <div class="mb-3">
+                <label class="form-label">Số tiền yêu cầu</label>
+                <input asp-for="SoTienYeuCau" type="hidden" id="loan-amount-value" />
+                <div class="input-group">
+                    <input id="loan-amount-display" class="form-control" value="@initialAmount" inputmode="numeric" autocomplete="off" placeholder="1.000.000" />
+                    <span class="input-group-text">VNĐ</span>
+                </div>
+                <span asp-validation-for="SoTienYeuCau" class="text-danger"></span>
+            </div>
+
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Kỳ hạn đề nghị (tháng)</label>
+                        <input asp-for="KyHanDeNghi" class="form-control" inputmode="numeric" />
+                        <span asp-validation-for="KyHanDeNghi" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Lãi suất đề nghị (%/năm)</label>
+                        <input asp-for="LaiSuatDeNghi" class="form-control" inputmode="decimal" />
+                        <span asp-validation-for="LaiSuatDeNghi" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Mục đích vay</label>
+                <input asp-for="MucDichVay" class="form-control" />
+                <span asp-validation-for="MucDichVay" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Ghi chú</label>
+                <textarea asp-for="GhiChu" class="form-control" rows="3"></textarea>
+                <span asp-validation-for="GhiChu" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save me-1"></i> Lưu thay đổi
+            </button>
+            <a asp-action="Index" class="btn btn-secondary">Hủy</a>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const amountDisplay = document.getElementById('loan-amount-display');
+            const amountValue = document.getElementById('loan-amount-value');
+            const form = amountDisplay?.closest('form');
+
+            function onlyDigits(value) {
+                return (value || '').replace(/[^\d]/g, '');
+            }
+
+            function formatVnd(value) {
+                const digits = onlyDigits(value);
+                return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            }
+
+            function syncAmount() {
+                if (!amountDisplay || !amountValue) return;
+                const digits = onlyDigits(amountDisplay.value);
+                amountValue.value = digits;
+                amountDisplay.value = formatVnd(digits);
+            }
+
+            amountDisplay?.addEventListener('input', () => syncAmount());
+            form?.addEventListener('submit', () => syncAmount());
+            syncAmount();
+        })();
+    </script>
+}

@@ -1,5 +1,13 @@
 @model BTL_PTTKHDT.Models.LoanDetailViewModel
 @{
+    string YesNo(bool value) => value ? "Có" : "Không";
+    string Percent(decimal value) => value <= 0 ? "-" : $"{value * 100m:0.0}%";
+    string PercentDouble(double? value) => value.HasValue ? $"{value.Value * 100d:0.0}%" : "-";
+    var report = Model.ThamDinh;
+}
+@{
+    string Vnd(decimal amount) =>
+        amount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) + " VNĐ";
     ViewData["Title"] = "Chi tiết đơn vay";
 }
 
@@ -13,7 +21,7 @@
     </div>
 
     <div class="row g-3">
-        <div class="col-lg-8">
+        <div class="col-12">
             <div class="card p-3">
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -36,7 +44,7 @@
 
                     <div class="col-md-6">
                         <div class="text-secondary small">Số tiền yêu cầu</div>
-                        <div class="fw-semibold">@Model.Loan.SoTienYeuCau.ToString("N0") đ</div>
+                        <div class="fw-semibold">@Vnd(Model.Loan.SoTienYeuCau)</div>
                     </div>
                     <div class="col-md-6">
                         <div class="text-secondary small">Mục đích vay</div>
@@ -67,47 +75,136 @@
             </div>
         </div>
 
-        <div class="col-lg-4">
-            <div class="card p-3 h-100">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="text-secondary">Trạng thái hồ sơ</div>
-                    <span class="badge text-bg-secondary">@Model.Loan.TrangThaiDon</span>
+    </div>
+
+    <div class="card section-card p-3 mt-3">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+            <div>
+                <div class="section-card-title">
+                    <i class="bi bi-clipboard2-check"></i>
+                    <span>Báo cáo thẩm định trước khi cho vay</span>
                 </div>
+                <div class="text-secondary small">Bảng kiểm tra nhanh để cán bộ tín dụng và người phê duyệt xem trước khi ra quyết định.</div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                <span class="status-chip @(report.DeXuatChoVay ? "status-chip-success" : "status-chip-warning")">
+                    @(report.DeXuatChoVay ? "Đề xuất có thể cho vay" : "Cần xem xét thêm")
+                </span>
+                <a asp-action="AppraisalPdf" asp-route-id="@Model.Loan.MaDon" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-filetype-pdf me-1"></i> Xuất PDF
+                </a>
+            </div>
+        </div>
 
-                @if (TempData["DisburseError"] != null)
-                {
-                    <div class="alert alert-danger mt-3 mb-0">@TempData["DisburseError"]</div>
-                }
-
-                @if (Model.Loan.TrangThaiDon == "da-duyet")
-                {
-                    <div class="mt-3">
-                        <form asp-action="Disburse" method="post" class="d-grid">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="id" value="@Model.Loan.MaDon" />
-                            <button class="btn btn-sm btn-success" type="submit">Giải ngân</button>
-                        </form>
-                    </div>
-                }
-
-                <hr />
-
-                <div class="row g-2">
-                    <div class="col-6">
-                        <div class="text-secondary small">Tổng TSĐB</div>
-                        <div class="fw-semibold">@Model.TongGiaTriDamBao.ToString("N0") đ</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-secondary small">Hạn mức gợi ý</div>
-                        <div class="fw-semibold">@Model.HanMucGoiY.ToString("N0") đ</div>
-                    </div>
-                    <div class="col-12">
-                        <div class="text-secondary small">LTV (Yêu cầu / TSĐB)</div>
-                        <div class="fw-semibold">@(Model.TyLeLtv <= 0 ? "-" : $"{Model.TyLeLtv * 100m:0.0}%")</div>
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="soft-panel p-3 h-100">
+                    <div class="fw-semibold mb-2">I. Thông tin và tư cách khách hàng</div>
+                    <div class="small text-secondary">Mã KH</div>
+                    <div class="fw-semibold mb-2">@report.MaKh</div>
+                    <div class="small text-secondary">Họ tên / Ten DN</div>
+                    <div class="fw-semibold mb-2">@report.HoTen</div>
+                    <div class="small text-secondary">Loại khách hàng</div>
+                    <div class="fw-semibold mb-2">@report.LoaiKhachHang</div>
+                    <div class="small text-secondary">CMND/CCCD</div>
+                    <div class="fw-semibold mb-2">@report.CmndCccd</div>
+                    <div class="small text-secondary">Địa chỉ</div>
+                    <div class="fw-semibold mb-2">@(string.IsNullOrWhiteSpace(report.DiaChi) ? "-" : report.DiaChi)</div>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <span class="status-chip @(report.DuTuCachVayVon ? "status-chip-success" : "status-chip-warning")">Đủ tư cách: @YesNo(report.DuTuCachVayVon)</span>
+                        <span class="status-chip status-chip-info">Mục đích hợp pháp: @YesNo(report.MucDichHopPhap)</span>
                     </div>
                 </div>
             </div>
+
+            <div class="col-lg-4">
+                <div class="soft-panel p-3 h-100">
+                    <div class="fw-semibold mb-2">II. Tài chính và lịch sử tín dụng</div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="small text-secondary">Điểm tín dụng</div>
+                            <div class="h4 mb-0">@((report.DiemTinDung?.ToString()) ?? "650")</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-secondary">Xếp hạng</div>
+                            <div class="h4 mb-0">@(report.XepHangRuiRo ?? "BBB")</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-secondary">Số lần trả trễ</div>
+                            <div class="fw-semibold">@report.SoLanTraTre</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-secondary">Nợ / thu nhập</div>
+                            <div class="fw-semibold">@PercentDouble(report.TyLeNoThuNhap)</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="small text-secondary">Dư nợ gốc hiện tại</div>
+                            <div class="fw-semibold">@Vnd(report.TongDuNoGocHienTai)</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-secondary">Nhóm nợ cao nhất</div>
+                            <div class="fw-semibold">Nhom @report.NhomNoCaoNhat</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-secondary">Nợ xấu</div>
+                            <div class="fw-semibold">@YesNo(report.CoNoXau)</div>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <span class="status-chip @(report.CoKhaNangTaiChinh ? "status-chip-success" : "status-chip-warning")">Tài chính: @YesNo(report.CoKhaNangTaiChinh)</span>
+                        <span class="status-chip @(report.CoNoQuaHan ? "status-chip-warning" : "status-chip-success")">Quá hạn: @YesNo(report.CoNoQuaHan)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="soft-panel p-3 h-100">
+                    <div class="fw-semibold mb-2">III. Nhu cầu vay và tài sản bảo đảm</div>
+                    <div class="small text-secondary">Mục đích vay</div>
+                    <div class="fw-semibold mb-2">@Model.Loan.MucDichVay</div>
+                    <div class="small text-secondary">Số tiền de nghi vay</div>
+                    <div class="fw-semibold mb-2">@Vnd(report.SoTienYeuCau)</div>
+                    <div class="small text-secondary">Tổng giá trị TSĐB</div>
+                    <div class="fw-semibold mb-2">@Vnd(report.TongGiaTriDamBao)</div>
+                    <div class="small text-secondary">Hạn mức gợi ý theo LTV</div>
+                    <div class="fw-semibold mb-2">@Vnd(report.HanMucGoiY)</div>
+                    <div class="small text-secondary">LTV yêu cầu / TSĐB</div>
+                    <div class="fw-semibold mb-2">@Percent(report.TyLeLtv)</div>
+                    <span class="status-chip @(report.DuDieuKienDamBao ? "status-chip-success" : "status-chip-warning")">Đảm bảo nợ vay: @YesNo(report.DuDieuKienDamBao)</span>
+                </div>
+            </div>
         </div>
+
+        @if (Model.TaiSanDamBao.Count > 0)
+        {
+            <div class="table-responsive mt-3">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Mã TS</th>
+                            <th>Loại tài sản</th>
+                            <th class="text-end">Định giá</th>
+                            <th class="text-center">LTV</th>
+                            <th>Giấy tờ pháp lý</th>
+                            <th class="text-center">Sở hữu</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var ts in Model.TaiSanDamBao)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@ts.MaTaiSanKh</td>
+                            <td>@ts.LoaiTaiSan</td>
+                            <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? Vnd(ts.GiaTriDinhGia.Value) : Vnd(ts.GiaTriKhaiBao))</td>
+                            <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
+                            <td>@(string.IsNullOrWhiteSpace(ts.GiayToPhapLy) ? "-" : ts.GiayToPhapLy)</td>
+                            <td class="text-center"><span class="status-chip status-chip-success">@ts.TrangThaiSoHuu</span></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
 
     <div class="row g-3 mt-1">
@@ -120,6 +217,10 @@
                 @if (TempData["CollateralError"] != null)
                 {
                     <div class="alert alert-danger mb-3">@TempData["CollateralError"]</div>
+                }
+                @if (TempData["CollateralSuccess"] != null)
+                {
+                    <div class="alert alert-success mb-3">@TempData["CollateralSuccess"]</div>
                 }
 
                 <form asp-action="AddCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="border rounded-3 p-3 mb-3">
@@ -182,19 +283,73 @@
                                                 <div class="text-secondary small">@ts.MoTa</div>
                                             }
                                         </td>
-                                        <td class="text-end">@ts.GiaTriKhaiBao.ToString("N0")</td>
-                                        <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? ts.GiaTriDinhGia.Value.ToString("N0") : "-")</td>
+                                        <td class="text-end">@Vnd(ts.GiaTriKhaiBao)</td>
+                                        <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? Vnd(ts.GiaTriDinhGia.Value) : "-")</td>
                                         <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
                                         <td class="text-center">
                                             <span class="badge text-bg-light">@ts.TrangThai</span>
                                         </td>
                                         <td class="text-end">
-                                            <form asp-action="ValuateCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="d-flex gap-2 justify-content-end">
+                                            <div class="collateral-actions">
+                                            <form asp-action="ValuateCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="collateral-valuation-form">
                                                 @Html.AntiForgeryToken()
                                                 <input type="hidden" name="MaTaiSanKh" value="@ts.MaTaiSanKh" />
-                                                <input name="GiaTriDinhGia" class="form-control form-control-sm" style="width: 120px;" placeholder="Định giá" inputmode="numeric" />
-                                                <button class="btn btn-sm btn-outline-primary" type="submit">Định giá</button>
+                                                <input name="GiaTriDinhGia" class="form-control form-control-sm collateral-valuation-input" placeholder="Định giá" inputmode="numeric" />
+                                                <button class="btn btn-sm btn-outline-primary collateral-icon-btn collateral-save-btn" type="submit" title="Lưu định giá" aria-label="Lưu định giá">Định giá</button>
                                             </form>
+                                            <div class="collateral-icon-group">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary collateral-icon-btn" data-bs-toggle="modal" data-bs-target="#edit-collateral-@ts.MaTaiSanKh" title="Sửa tài sản" aria-label="Sửa tài sản">
+                                                    Sửa
+                                                </button>
+                                                <form asp-action="DeleteCollateral" asp-route-id="@Model.Loan.MaDon" asp-route-maTaiSanKh="@ts.MaTaiSanKh" method="post" onsubmit="return confirm('Xóa tài sản này khỏi hồ sơ?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <button class="btn btn-sm btn-outline-danger collateral-icon-btn collateral-delete-btn" type="submit" title="Xóa tài sản" aria-label="Xóa tài sản">Xóa</button>
+                                                </form>
+                                            </div>
+                                            </div>
+
+                                            <div class="modal fade" id="edit-collateral-@ts.MaTaiSanKh" tabindex="-1" aria-labelledby="edit-collateral-label-@ts.MaTaiSanKh" aria-hidden="true">
+                                                <div class="modal-dialog modal-lg modal-dialog-centered">
+                                                    <div class="modal-content text-start">
+                                                        <form asp-action="EditCollateral" asp-route-id="@Model.Loan.MaDon" method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="MaTaiSanKh" value="@ts.MaTaiSanKh" />
+                                                            <div class="modal-header">
+                                                                <h5 class="modal-title" id="edit-collateral-label-@ts.MaTaiSanKh">Sửa tài sản @ts.MaTaiSanKh</h5>
+                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                            </div>
+                                                            <div class="modal-body">
+                                                                <div class="row g-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label">Loại tài sản</label>
+                                                                        <input name="LoaiTaiSan" class="form-control" value="@ts.LoaiTaiSan" />
+                                                                    </div>
+                                                                    <div class="col-md-3">
+                                                                        <label class="form-label">Giá trị khai báo</label>
+                                                                        <input name="GiaTriKhaiBao" class="form-control" value="@ts.GiaTriKhaiBao.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" inputmode="numeric" />
+                                                                    </div>
+                                                                    <div class="col-md-3">
+                                                                        <label class="form-label">Tỷ lệ LTV</label>
+                                                                        <input name="TyLeLtv" class="form-control" value="@ts.TyLeLtv.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" inputmode="decimal" />
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label">Giấy tờ pháp lý</label>
+                                                                        <input name="GiayToPhapLy" class="form-control" value="@ts.GiayToPhapLy" />
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label">Mô tả</label>
+                                                                        <input name="MoTa" class="form-control" value="@ts.MoTa" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="modal-footer">
+                                                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                                                                <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 }
@@ -258,3 +413,54 @@
         </div>
     </div>
 </div>
+
+<style>
+    .collateral-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: .4rem;
+        flex-wrap: wrap;
+    }
+
+    .collateral-valuation-form,
+    .collateral-icon-group {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: .35rem;
+    }
+
+    .collateral-valuation-input {
+        width: 112px;
+    }
+
+    .collateral-icon-btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 0;
+        line-height: 1;
+    }
+
+    .collateral-icon-btn::before {
+        font-family: "bootstrap-icons";
+        font-size: .92rem;
+    }
+
+    .collateral-save-btn::before {
+        content: "\F633";
+    }
+
+    .collateral-icon-group > .collateral-icon-btn::before {
+        content: "\F4CA";
+    }
+
+    .collateral-delete-btn::before {
+        content: "\F5DE";
+    }
+</style>

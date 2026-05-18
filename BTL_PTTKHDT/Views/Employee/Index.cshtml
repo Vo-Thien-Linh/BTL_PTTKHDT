@@ -7,10 +7,22 @@
             <i class='bi bi-plus-lg me-1'></i>+ Thêm nhân viên
         </a>
     </div>
+    @if (TempData["EmployeeSuccess"] != null)
+    {
+        <div class="alert alert-success">@TempData["EmployeeSuccess"]</div>
+    }
+    @if (TempData["EmployeeWarning"] != null)
+    {
+        <div class="alert alert-warning">@TempData["EmployeeWarning"]</div>
+    }
+    @if (TempData["EmployeeError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["EmployeeError"]</div>
+    }
     <div class='card mb-3'>
         <div class='card-body'>
             <form method='get' class='d-flex gap-2' style='max-width:400px'>
-                <input type='text' name='q' value='@ViewBag.Query' class='form-control' placeholder='Tìm kiếm theo mã, họ tên, SDT...' />
+                <input type='text' name='q' value='@ViewBag.Query' class='form-control' placeholder='Tìm kiếm theo mã, họ tên, SĐT...' />
                 <button class='btn btn-outline-secondary' type='submit'>
                     <i class='bi bi-search'></i> Tìm
                 </button>
@@ -36,23 +48,26 @@
                                  style='cursor: pointer;'
                                  onclick="window.location='@Url.Action("Edit", new { id = item.MaNv })'">
                                 <!-- Avatar Section -->
-                                <div class='position-relative' style='height: 180px; border-radius: 8px 8px 0 0; overflow: hidden;'>
-                                    @if (!string.IsNullOrWhiteSpace(item.AnhDaiDienUrl))
-                                    {
-                                        <img src='@item.AnhDaiDienUrl' alt='@item.HoTen' class='w-100 h-100' style='object-fit: cover;'>
-                                    }
-                                    else
-                                    {
-                                        <div class='w-100 h-100 d-flex align-items-center justify-content-center avatar-placeholder'>
-                                            <i class='bi bi-person-circle avatar-icon'></i>
-                                        </div>
-                                    }
+                                <div class='profile-card-head position-relative'>
+                                    <div class='profile-card-cover'></div>
+                                    <div class='profile-avatar-wrap'>
+                                        @if (!string.IsNullOrWhiteSpace(item.AnhDaiDienUrl))
+                                        {
+                                            <img src='@item.AnhDaiDienUrl' alt='@item.HoTen' class='profile-avatar-img'>
+                                        }
+                                        else
+                                        {
+                                            <div class='profile-avatar-placeholder'>
+                                                <i class='bi bi-person'></i>
+                                            </div>
+                                        }
+                                    </div>
                                     <!-- Role Badge -->
-                                    <span class='badge nv-role-badge position-absolute' style='top: 10px; right: 10px;'>
+                                    <span class='badge nv-role-badge position-absolute' style='top: 12px; right: 12px;'>
                                         <i class='bi bi-briefcase me-1'></i>@item.VaiTro
                                     </span>
                                     <!-- Status Badge -->
-                                    <div class='position-absolute' style='bottom: 10px; left: 10px;'>
+                                    <div class='position-absolute' style='bottom: 12px; right: 12px;'>
                                         @if (item.IsActive)
                                         {
                                             <span class='badge status-badge-active'>
@@ -69,7 +84,7 @@
                                 </div>
 
                                 <!-- Card Body -->
-                                <div class='card-body pb-2'>
+                                <div class='card-body profile-card-body pb-2'>
                                     <div class='mb-2'>
                                         <h6 class='card-title mb-0 text-truncate fw-semibold'>@item.HoTen</h6>
                                         <small class='text-muted'>Mã: @item.MaNvText</small>
@@ -79,6 +94,13 @@
                                             <span class='info-label'><i class='bi bi-telephone me-1'></i>Điện thoại</span>
                                             <span class='info-value fw-medium'>@item.SoDienThoai</span>
                                         </div>
+                                        @if (!string.IsNullOrWhiteSpace(item.Email))
+                                        {
+                                            <div class='info-row'>
+                                                <span class='info-label'><i class='bi bi-envelope me-1'></i>Gmail</span>
+                                                <span class='info-value text-truncate' title='@item.Email'>@item.Email</span>
+                                            </div>
+                                        }
                                         <div class='info-row'>
                                             <span class='info-label'><i class='bi bi-calendar3 me-1'></i>Ngày sinh</span>
                                             <span class='info-value'>@item.NgaySinh.ToString("dd/MM/yyyy")</span>
@@ -130,14 +152,62 @@
     .hover-card {
         transition: transform 0.25s ease, box-shadow 0.25s ease;
         border-radius: 12px !important;
+        border: 1px solid #e5e7eb !important;
         overflow: hidden;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06) !important;
     }
     .hover-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 28px rgba(0,0,0,0.12) !important;
+        transform: translateY(-4px);
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12) !important;
     }
 
     /* ── Avatar placeholder ── */
+    .profile-card-head {
+        height: 118px;
+        border-radius: 12px 12px 0 0;
+        overflow: visible;
+        background: #f8fafc;
+    }
+    .profile-card-cover {
+        height: 92px;
+        border-radius: 12px 12px 28px 28px;
+        background:
+            linear-gradient(135deg, rgba(79, 70, 229, 0.14), rgba(14, 165, 233, 0.16)),
+            linear-gradient(90deg, #f8fafc, #eef2f7);
+        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.72);
+    }
+    .profile-avatar-wrap {
+        position: absolute;
+        left: 18px;
+        bottom: -28px;
+        width: 84px;
+        height: 84px;
+        border-radius: 999px;
+        padding: 4px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    }
+    .profile-avatar-img,
+    .profile-avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        object-fit: cover;
+    }
+    .profile-avatar-placeholder {
+        background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 52%, #e0f2fe 100%);
+        color: #4f46e5;
+        font-size: 2.25rem;
+    }
+    .profile-card-body {
+        padding-top: 2.25rem;
+    }
+
     .avatar-placeholder {
         background: linear-gradient(135deg, #eef2ff 0%, #dde4f5 100%);
     }
@@ -199,8 +269,8 @@
     .card-action-bar {
         display: flex;
         align-items: stretch;
-        border-top: 1px solid #f1f5f9;
-        background: #fafbfc;
+        border-top: 1px solid #e5e7eb;
+        background: #f8fafc;
     }
     .action-btn {
         flex: 1;

@@ -34,6 +34,7 @@ public sealed class CustomerRowViewModel
     public string? AnhDaiDienUrl { get; init; }
 
     public int? DiemTinDung { get; init; }
+    public string? XepHangRuiRo { get; init; }
 
     public required bool IsActive { get; init; }
 }

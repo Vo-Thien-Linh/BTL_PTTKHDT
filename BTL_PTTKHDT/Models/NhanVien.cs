@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace BTL_PTTKHDT.Models;
@@ -12,6 +12,8 @@ public partial class NhanVien
     public string SoDienThoai { get; set; } = null!;
 
     public string? DiaChi { get; set; }
+
+    public string? Email { get; set; }
 
     public DateOnly NgaySinh { get; set; }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace BTL_PTTKHDT.Models;
@@ -22,6 +22,10 @@ public partial class TaiKhoanNhanVien
     public DateTime NgayTao { get; set; }
 
     public DateTime NgayCapNhat { get; set; }
+
+    public string? ResetPasswordCodeHash { get; set; }
+
+    public DateTime? ResetPasswordExpiresAt { get; set; }
 
     public virtual NhanVien MaNvNavigation { get; set; } = null!;
 }

@@ -52,9 +52,13 @@
                     <i class="bi bi-folder2-open me-2"></i>
                     Hồ sơ vay vốn
                 </a>
+                <a class="app-nav-link @(IsActive("Disbursement") ? "active" : "")" asp-controller="Disbursement" asp-action="Index">
+                    <i class="bi bi-cash-stack me-2"></i>
+                    Giải ngân
+                </a>
                 <a class="app-nav-link @(IsActive("Debt") ? "active" : "")" asp-controller="Debt" asp-action="Index">
                     <i class="bi bi-cash-coin me-2"></i>
-                    Giải ngân &amp; Quản lý nợ
+                    Quản lý nợ
                 </a>
 
                 <div class="app-nav-divider"></div>
@@ -63,10 +67,13 @@
                     <i class="bi bi-gear me-2"></i>
                     Cài đặt
                 </a>
-                <a class="app-nav-link text-danger" href="#">
+                <form asp-controller="Account" asp-action="Logout" method="post" class="m-0">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="app-nav-link app-nav-button text-danger w-100 border-0">
                     <i class="bi bi-box-arrow-right me-2"></i>
                     Đăng xuất
-                </a>
+                    </button>
+                </form>
             </nav>
         </aside>
 
@@ -91,8 +98,14 @@
                         <button type="button" class="btn btn-sm btn-light" aria-label="Help">
                             <i class="bi bi-question-circle"></i>
                         </button>
-                        <div class="app-user rounded-circle d-flex align-items-center justify-content-center" aria-label="User">
-                            <i class="bi bi-person"></i>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="text-end d-none d-md-block">
+                                <div class="small fw-semibold">@(User.Identity?.Name ?? "Admin")</div>
+                                <div class="text-secondary small">Quản trị hệ thống</div>
+                            </div>
+                            <div class="app-user rounded-circle d-flex align-items-center justify-content-center" aria-label="User">
+                                <i class="bi bi-person"></i>
+                            </div>
                         </div>
                     </div>
                 </div>

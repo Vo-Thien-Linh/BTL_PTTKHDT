@@ -86,7 +86,7 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.SoTienYeuCau).HasColumnType("money");
             entity.Property(e => e.TrangThaiDon)
                 .HasMaxLength(30)
-                .HasDefaultValue("Dang soan");
+                .HasDefaultValue("Đang soạn");
 
             entity.HasOne(d => d.MaKhNavigation).WithMany(p => p.DonVays)
                 .HasForeignKey(d => d.MaKh)
@@ -161,13 +161,20 @@ public partial class QltdnhContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false)
                 .HasColumnName("CMND_CCCD");
+            entity.Property(e => e.ChucVuNguoiDaiDien).HasMaxLength(100);
             entity.Property(e => e.DiaChi).HasMaxLength(255);
+            entity.Property(e => e.DoanhThuBinhQuanThang).HasColumnType("money");
             entity.Property(e => e.Email)
                 .HasMaxLength(150)
                 .IsUnicode(false);
             entity.Property(e => e.HoTen).HasMaxLength(100);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.LinhVucKinhDoanh).HasMaxLength(150);
             entity.Property(e => e.LoaiKhachHang).HasMaxLength(20);
+            entity.Property(e => e.LoiNhuanBinhQuanThang).HasColumnType("money");
+            entity.Property(e => e.MaSoThue)
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.NgayCapNhat)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
@@ -177,6 +184,7 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.SoDienThoai)
                 .HasMaxLength(15)
                 .IsUnicode(false);
+            entity.Property(e => e.TenNguoiDaiDien).HasMaxLength(100);
         });
 
         modelBuilder.Entity<KhoanVay>(entity =>
@@ -195,11 +203,11 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.NhomNo).HasDefaultValue((byte)1);
             entity.Property(e => e.PhuongThucTraNo)
                 .HasMaxLength(20)
-                .HasDefaultValue("Goc lai deu");
+                .HasDefaultValue("Gốc lãi đều");
             entity.Property(e => e.SoTienVay).HasColumnType("money");
             entity.Property(e => e.TrangThai)
                 .HasMaxLength(20)
-                .HasDefaultValue("Dang vay");
+                .HasDefaultValue("Đang vay");
 
             entity.HasOne(d => d.MaDonNavigation).WithMany(p => p.KhoanVays)
                 .HasForeignKey(d => d.MaDon)
@@ -225,7 +233,7 @@ public partial class QltdnhContext : DbContext
                 .HasColumnType("datetime");
             entity.Property(e => e.NguonCapNhat)
                 .HasMaxLength(50)
-                .HasDefaultValue("He thong");
+                .HasDefaultValue("Hệ thống");
             entity.Property(e => e.ThuNhapHangThang).HasColumnType("money");
             entity.Property(e => e.XepHangRuiRo).HasMaxLength(5);
 
@@ -250,7 +258,7 @@ public partial class QltdnhContext : DbContext
                 .HasColumnType("money");
             entity.Property(e => e.TrangThai)
                 .HasMaxLength(15)
-                .HasDefaultValue("Chua tra");
+                .HasDefaultValue("Chưa trả");
 
             entity.HasOne(d => d.MaVayNavigation).WithMany(p => p.LichTraNos)
                 .HasForeignKey(d => d.MaVay)
@@ -267,6 +275,9 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.MaNv).HasColumnName("MaNV");
             entity.Property(e => e.AnhDaiDienUrl).HasMaxLength(500);
             entity.Property(e => e.DiaChi).HasMaxLength(255);
+            entity.Property(e => e.Email)
+                .HasMaxLength(150)
+                .IsUnicode(false);
             entity.Property(e => e.GioiTinh).HasMaxLength(10);
             entity.Property(e => e.HoTen).HasMaxLength(100);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
@@ -343,6 +354,8 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.NgayTao)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.ResetPasswordCodeHash).HasMaxLength(256);
+            entity.Property(e => e.ResetPasswordExpiresAt).HasColumnType("datetime");
             entity.Property(e => e.TenDangNhap).HasMaxLength(50);
 
             entity.HasOne(d => d.MaNvNavigation).WithOne(p => p.TaiKhoanNhanVien)
@@ -368,7 +381,11 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.NgayKhaiBao).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.TrangThai)
                 .HasMaxLength(20)
-                .HasDefaultValue("Chua dinh gia");
+                .HasDefaultValue("Chưa định giá");
+            entity.Property(e => e.TrangThaiSoHuu)
+                .HasMaxLength(20)
+                .HasDefaultValue("Đang sở hữu");
+            entity.Property(e => e.GhiChuSoHuu).HasMaxLength(500);
             entity.Property(e => e.TyLeLtv)
                 .HasDefaultValue(0.69999999999999996)
                 .HasColumnName("TyLeLTV");
@@ -395,7 +412,7 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.NgayTheChap).HasDefaultValueSql("(getdate())");
             entity.Property(e => e.TrangThai)
                 .HasMaxLength(20)
-                .HasDefaultValue("Dang the chap");
+                .HasDefaultValue("Đang thế chấp");
 
             entity.HasOne(d => d.MaTaiSanKhNavigation).WithMany(p => p.TaiSanTheChaps)
                 .HasForeignKey(d => d.MaTaiSanKh)
@@ -417,7 +434,7 @@ public partial class QltdnhContext : DbContext
             entity.Property(e => e.GhiChu).HasMaxLength(255);
             entity.Property(e => e.HinhThuc)
                 .HasMaxLength(30)
-                .HasDefaultValue("Tien mat");
+                .HasDefaultValue("Tiền mặt");
             entity.Property(e => e.MaNv).HasColumnName("MaNV");
             entity.Property(e => e.NgayThanhToan)
                 .HasDefaultValueSql("(getdate())")

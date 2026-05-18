@@ -1,4 +1,5 @@
-using BTL_PTTKHDT.Models;
+﻿using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,11 +10,13 @@ public sealed class CustomerController : Controller
 {
     private readonly QltdnhContext _db;
     private readonly IWebHostEnvironment _env;
+    private readonly ICreditScoreService _creditScoreService;
 
-    public CustomerController(QltdnhContext db, IWebHostEnvironment env)
+    public CustomerController(QltdnhContext db, IWebHostEnvironment env, ICreditScoreService creditScoreService)
     {
         _db = db;
         _env = env;
+        _creditScoreService = creditScoreService;
     }
 
     private async Task<string?> SaveAvatarAsync(IFormFile? file, CancellationToken ct)
@@ -96,6 +99,10 @@ public sealed class CustomerController : Controller
                     .OrderByDescending(ls => ls.NgayCapNhat)
                     .Select(ls => (int?)ls.DiemTinDung)
                     .FirstOrDefault(),
+                XepHangRuiRo = x.LichSuTinDungs
+                    .OrderByDescending(ls => ls.NgayCapNhat)
+                    .Select(ls => ls.XepHangRuiRo)
+                    .FirstOrDefault(),
                 IsActive = x.IsActive
             })
             .ToListAsync(cancellationToken);
@@ -110,7 +117,7 @@ public sealed class CustomerController : Controller
             TotalCount = totalCount
         };
 
-        ViewData["Title"] = "Quản lý Khách hàng";
+        ViewData["Title"] = "Quản lý Khach hang";
         return View(model);
     }
 
@@ -182,6 +189,28 @@ public sealed class CustomerController : Controller
         return $"TSK{(maxId + 1):0000}";
     }
 
+    private Task<LichSuTinDung?> GetLatestCreditHistoryAsync(string maKh, CancellationToken ct)
+    {
+        return _db.LichSuTinDungs
+            .AsNoTracking()
+            .Where(x => x.MaKh == maKh)
+            .OrderByDescending(x => x.NgayCapNhat)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private async Task<HashSet<string>> GetActivePledgedAssetIdsAsync(string maKh, CancellationToken ct)
+    {
+        var ids = await _db.TaiSanTheChaps
+            .AsNoTracking()
+            .Where(x =>
+                x.MaTaiSanKhNavigation.MaKh == maKh
+                && (x.TrangThai == "Đang thế chấp" || x.TrangThai == "Xử lý"))
+            .Select(x => x.MaTaiSanKh)
+            .ToListAsync(ct);
+
+        return ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(KhachHang model, IFormFile? AnhDaiDienFile, CancellationToken ct = default)
@@ -194,6 +223,7 @@ public sealed class CustomerController : Controller
         }
 
         var isBusiness = MapCustomerTypeKind(model.LoaiKhachHang) == "business";
+        ValidateBusinessFields(model, isBusiness);
         if (!isBusiness && (AnhDaiDienFile == null || AnhDaiDienFile.Length <= 0))
         {
             ModelState.AddModelError(nameof(AnhDaiDienFile), "Ảnh đại diện khách hàng là bắt buộc với khách hàng cá nhân.");
@@ -212,12 +242,17 @@ public sealed class CustomerController : Controller
             model.AnhDaiDienUrl = await SaveAvatarAsync(AnhDaiDienFile, ct) ?? model.AnhDaiDienUrl;
             _db.KhachHangs.Add(model);
             await _db.SaveChangesAsync(ct);
+            await _creditScoreService.RecalculateAsync(
+                model.MaKh,
+                isBusiness ? "Tao doanh nghiep" : "Tao khach hang",
+                ct,
+                isBusiness ? model.DoanhThuBinhQuanThang : null);
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             var innerMsg = ex.InnerException?.Message ?? ex.Message;
-            ModelState.AddModelError(nameof(AnhDaiDienFile), innerMsg);
+            ModelState.AddModelError(nameof(AnhDaiDienFile), "Ảnh đại diện khách hàng là bắt buộc với khách hàng cá nhân.");
             return View(model);
         }
     }
@@ -235,7 +270,70 @@ public sealed class CustomerController : Controller
             .ToListAsync(ct);
 
         ViewData["CustomerAssets"] = assets;
+        ViewData["ActivePledgedAssetIds"] = await GetActivePledgedAssetIdsAsync(customer.MaKh, ct);
+        ViewData["CreditHistory"] = await GetLatestCreditHistoryAsync(customer.MaKh, ct);
         return View(customer);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateCreditIncome(string id, string? thuNhapHangThang, CancellationToken ct = default)
+    {
+        var customer = await _db.KhachHangs.FirstOrDefaultAsync(x => x.MaKh == id, ct);
+        if (customer == null) return NotFound();
+
+        if (!TryParseMoney(thuNhapHangThang, out var monthlyIncome) || monthlyIncome <= 0)
+        {
+            TempData["CreditError"] = "Thu nhap hang thang phai lon hon 0.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        if (MapCustomerTypeKind(customer.LoaiKhachHang) == "business")
+        {
+            customer.DoanhThuBinhQuanThang = monthlyIncome;
+            customer.NgayCapNhat = DateTime.Now;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        await _creditScoreService.RecalculateAsync(id, "Cap nhat thu nhap", ct, monthlyIncome);
+        TempData["CreditSuccess"] = "Da cap nhat thu nhap va tinh lai diem tin dung.";
+        return RedirectToAction(nameof(Edit), new { id });
+    }
+
+    private static bool TryParseMoney(string? value, out decimal result)
+    {
+        result = 0m;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        var cleaned = value.Trim()
+            .Replace("VNĐ", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("VND", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("đ", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace(" ", string.Empty)
+            .Replace(".", string.Empty)
+            .Replace(",", string.Empty);
+
+        return decimal.TryParse(cleaned, out result);
+    }
+
+    private void ValidateBusinessFields(KhachHang model, bool isBusiness)
+    {
+        if (!isBusiness) return;
+
+        if (string.IsNullOrWhiteSpace(model.MaSoThue))
+        {
+            ModelState.AddModelError(nameof(KhachHang.MaSoThue), "Ma so thue la bat buoc voi khach hang doanh nghiep.");
+        }
+
+        if (string.IsNullOrWhiteSpace(model.TenNguoiDaiDien))
+        {
+            ModelState.AddModelError(nameof(KhachHang.TenNguoiDaiDien), "Ten nguoi dai dien la bat buoc voi khach hang doanh nghiep.");
+        }
+
+        if (!model.DoanhThuBinhQuanThang.HasValue || model.DoanhThuBinhQuanThang.Value <= 0)
+        {
+            ModelState.AddModelError(nameof(KhachHang.DoanhThuBinhQuanThang), "Doanh thu binh quan thang phai lon hon 0.");
+        }
     }
 
     [HttpPost]
@@ -268,7 +366,10 @@ public sealed class CustomerController : Controller
             NgayKhaiBao = DateOnly.FromDateTime(now),
             NgayDinhGia = null,
             MaNvdinhGia = null,
-            TrangThai = "Chua dinh gia"
+            TrangThai = "Chưa định giá",
+            TrangThaiSoHuu = "Đang sở hữu",
+            NgayBan = null,
+            GhiChuSoHuu = null
         };
 
         _db.TaiSanKhachHangs.Add(entity);
@@ -284,6 +385,7 @@ public sealed class CustomerController : Controller
         if (existing == null) return NotFound();
 
         var isBusiness = MapCustomerTypeKind(model.LoaiKhachHang) == "business";
+        ValidateBusinessFields(model, isBusiness);
         var hasAvatar = !string.IsNullOrWhiteSpace(existing.AnhDaiDienUrl) || (AnhDaiDienFile != null && AnhDaiDienFile.Length > 0);
         if (!isBusiness && !hasAvatar)
         {
@@ -299,6 +401,8 @@ public sealed class CustomerController : Controller
                 .ToListAsync(ct);
 
             ViewData["CustomerAssets"] = assets;
+            ViewData["ActivePledgedAssetIds"] = await GetActivePledgedAssetIdsAsync(existing.MaKh, ct);
+            ViewData["CreditHistory"] = await GetLatestCreditHistoryAsync(existing.MaKh, ct);
             return View(model);
         }
 
@@ -311,6 +415,14 @@ public sealed class CustomerController : Controller
             existing.SoDienThoai = model.SoDienThoai;
             existing.Email = model.Email;
             existing.LoaiKhachHang = model.LoaiKhachHang;
+            existing.MaSoThue = model.MaSoThue;
+            existing.TenNguoiDaiDien = model.TenNguoiDaiDien;
+            existing.ChucVuNguoiDaiDien = model.ChucVuNguoiDaiDien;
+            existing.NgayThanhLap = model.NgayThanhLap;
+            existing.LinhVucKinhDoanh = model.LinhVucKinhDoanh;
+            existing.DoanhThuBinhQuanThang = model.DoanhThuBinhQuanThang;
+            existing.LoiNhuanBinhQuanThang = model.LoiNhuanBinhQuanThang;
+            existing.SoLaoDong = model.SoLaoDong;
             existing.IsActive = model.IsActive;
             existing.NgayCapNhat = DateTime.Now;
 
@@ -319,12 +431,16 @@ public sealed class CustomerController : Controller
 
             _db.KhachHangs.Update(existing);
             await _db.SaveChangesAsync(ct);
+            if (isBusiness)
+            {
+                await _creditScoreService.RecalculateAsync(existing.MaKh, "Cap nhat doanh nghiep", ct, existing.DoanhThuBinhQuanThang);
+            }
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex)
         {
             var innerMsg = ex.InnerException?.Message ?? ex.Message;
-            ModelState.AddModelError(nameof(AnhDaiDienFile), innerMsg);
+            ModelState.AddModelError(nameof(AnhDaiDienFile), "Ảnh đại diện khách hàng là bắt buộc với khách hàng cá nhân.");
 
             var assets = await _db.TaiSanKhachHangs
                 .AsNoTracking()
@@ -333,8 +449,37 @@ public sealed class CustomerController : Controller
                 .ToListAsync(ct);
 
             ViewData["CustomerAssets"] = assets;
+            ViewData["ActivePledgedAssetIds"] = await GetActivePledgedAssetIdsAsync(existing.MaKh, ct);
+            ViewData["CreditHistory"] = await GetLatestCreditHistoryAsync(existing.MaKh, ct);
             return View(model);
         }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkAssetSold(string id, string maTaiSanKh, CancellationToken ct = default)
+    {
+        var asset = await _db.TaiSanKhachHangs
+            .FirstOrDefaultAsync(x => x.MaKh == id && x.MaTaiSanKh == maTaiSanKh, ct);
+        if (asset == null) return NotFound();
+
+        var isPledged = await _db.TaiSanTheChaps
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.MaTaiSanKh == maTaiSanKh
+                && (x.TrangThai == "Đang thế chấp" || x.TrangThai == "Xử lý"),
+                ct);
+        if (isPledged)
+        {
+            TempData["AssetError"] = "Tai san dang the chap, can giai chap truoc khi ghi nhan da ban.";
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+
+        asset.TrangThaiSoHuu = "Đã bán";
+        asset.NgayBan = DateOnly.FromDateTime(DateTime.Now);
+        asset.GhiChuSoHuu = "Khach hang da ban tai san";
+        await _db.SaveChangesAsync(ct);
+        return RedirectToAction(nameof(Edit), new { id });
     }
 
     [HttpGet]
@@ -352,8 +497,40 @@ public sealed class CustomerController : Controller
         var customer = await _db.KhachHangs.FirstOrDefaultAsync(x => x.MaKh == id, ct);
         if (customer != null)
         {
-            _db.KhachHangs.Remove(customer);
-            await _db.SaveChangesAsync(ct);
+            var hasRelatedData = await _db.DonVays.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+                || await _db.KhoanVays.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+                || await _db.TaiSanKhachHangs.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+                || await _db.LichSuTinDungs.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+                || await _db.HanMucTinDungs.AsNoTracking().AnyAsync(x => x.MaKh == id, ct);
+
+            if (hasRelatedData)
+            {
+                customer.IsActive = false;
+                customer.NgayCapNhat = DateTime.Now;
+                await _db.SaveChangesAsync(ct);
+                TempData["CustomerWarning"] = "Khach hang da co du lieu nghiep vu nen khong xoa vinh vien. Hệ thống da chuyen sang trang thai tam ngung.";
+            }
+            else
+            {
+                try
+                {
+                    _db.KhachHangs.Remove(customer);
+                    await _db.SaveChangesAsync(ct);
+                    TempData["CustomerSuccess"] = "Da xoa khach hang.";
+                }
+                catch (DbUpdateException)
+                {
+                    _db.ChangeTracker.Clear();
+                    var softDeleteCustomer = await _db.KhachHangs.FirstOrDefaultAsync(x => x.MaKh == id, ct);
+                    if (softDeleteCustomer != null)
+                    {
+                        softDeleteCustomer.IsActive = false;
+                        softDeleteCustomer.NgayCapNhat = DateTime.Now;
+                        await _db.SaveChangesAsync(ct);
+                    }
+                    TempData["CustomerWarning"] = "Khong the xoa vinh vien vi khach hang dang duoc tham chieu. Hệ thống da chuyen sang trang thai tam ngung.";
+                }
+            }
         }
         return RedirectToAction(nameof(Index));
     }
@@ -363,7 +540,7 @@ public sealed class CustomerController : Controller
     // ──────────────────────────────────────────────
 
     /// <summary>
-    /// Tìm kiếm + lọc danh sách khách hàng — trả JSON cho AJAX.
+    /// Tim kiếm + lọc danh sách khách hàng — trả JSON cho AJAX.
     /// GET /api/customers/search?q=&amp;type=&amp;page=1&amp;pageSize=4
     /// </summary>
     [HttpGet("/api/customers/search")]
@@ -419,6 +596,10 @@ public sealed class CustomerController : Controller
                 DiemTinDung = x.LichSuTinDungs
                     .OrderByDescending(ls => ls.NgayCapNhat)
                     .Select(ls => (int?)ls.DiemTinDung)
+                    .FirstOrDefault(),
+                XepHangRuiRo = x.LichSuTinDungs
+                    .OrderByDescending(ls => ls.NgayCapNhat)
+                    .Select(ls => ls.XepHangRuiRo)
                     .FirstOrDefault()
             })
             .ToListAsync(ct);
@@ -427,7 +608,7 @@ public sealed class CustomerController : Controller
     }
 
     /// <summary>
-    /// Kiểm tra CCCD/CMND đã tồn tại chưa — dùng cho validate real-time.
+    /// Kiểm tra CCCD/CMND đã tồn tại chưa - dùng cho validate real-time.
     /// GET /api/customers/check-cmnd?value=038...&amp;excludeId=KH001
     /// </summary>
     [HttpGet("/api/customers/check-cmnd")]
@@ -464,15 +645,18 @@ public sealed class CustomerController : Controller
         }
 
         if (customer == null)
-            return NotFound(new { message = "Không tìm thấy khách hàng." });
+            return NotFound(new { message = "Khong tìm thấy khách hàng." });
 
+        var credit = await GetLatestCreditHistoryAsync(customer.MaKh, ct);
         return Ok(new
         {
             customer.MaKh,
             customer.HoTen,
             customer.CmndCccd,
             customer.SoDienThoai,
-            customer.LoaiKhachHang
+            customer.LoaiKhachHang,
+            DiemTinDung = credit?.DiemTinDung,
+            XepHangRuiRo = credit?.XepHangRuiRo
         });
     }
 
@@ -485,15 +669,18 @@ public sealed class CustomerController : Controller
 
         var customer = await _db.KhachHangs.AsNoTracking().FirstOrDefaultAsync(x => x.SoDienThoai == term, ct);
         if (customer == null)
-            return NotFound(new { message = "Không tìm thấy khách hàng." });
+            return NotFound(new { message = "Khong tìm thấy khách hàng." });
 
+        var credit = await GetLatestCreditHistoryAsync(customer.MaKh, ct);
         return Ok(new
         {
             customer.MaKh,
             customer.HoTen,
             customer.CmndCccd,
             customer.SoDienThoai,
-            customer.LoaiKhachHang
+            customer.LoaiKhachHang,
+            DiemTinDung = credit?.DiemTinDung,
+            XepHangRuiRo = credit?.XepHangRuiRo
         });
     }
 
@@ -506,10 +693,31 @@ public sealed class CustomerController : Controller
     {
         var customer = await _db.KhachHangs.FirstOrDefaultAsync(x => x.MaKh == id, ct);
         if (customer == null)
-            return NotFound(new { message = $"Không tìm thấy khách hàng: {id}" });
+            return NotFound(new { message = $"Khong tìm thấy khách hàng: {id}" });
 
-        _db.KhachHangs.Remove(customer);
-        await _db.SaveChangesAsync(ct);
-        return Ok(new { success = true, message = "Đã xóa khách hàng thành công." });
+        var hasRelatedData = await _db.DonVays.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+            || await _db.KhoanVays.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+            || await _db.TaiSanKhachHangs.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+            || await _db.LichSuTinDungs.AsNoTracking().AnyAsync(x => x.MaKh == id, ct)
+            || await _db.HanMucTinDungs.AsNoTracking().AnyAsync(x => x.MaKh == id, ct);
+
+        if (hasRelatedData)
+        {
+            customer.IsActive = false;
+            customer.NgayCapNhat = DateTime.Now;
+            await _db.SaveChangesAsync(ct);
+            return Ok(new { success = true, message = "Khach hang da co du lieu nghiep vu nen he thong da tam ngung thay vi xoa vinh vien." });
+        }
+
+        try
+        {
+            _db.KhachHangs.Remove(customer);
+            await _db.SaveChangesAsync(ct);
+            return Ok(new { success = true, message = "Da xoa khach hang thanh cong." });
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new { success = false, message = "Khong the xoa khach hang vi dang duoc tham chieu boi du lieu nghiep vu." });
+        }
     }
 }

@@ -12,19 +12,20 @@
                   </div>
           <div class='mb-3'><label>Họ tên</label><input asp-for='HoTen' class='form-control' /><span asp-validation-for='HoTen' class='text-danger'></span></div>
           <div class='mb-3'><label>SĐT</label><input asp-for='SoDienThoai' class='form-control' maxlength="10" inputmode="numeric" /><span asp-validation-for='SoDienThoai' class='text-danger'></span></div>
+          <div class='mb-3'><label>Gmail nhận mã quên mật khẩu</label><input asp-for='Email' type='email' class='form-control' autocomplete='email' placeholder='ten@gmail.com' /><span asp-validation-for='Email' class='text-danger'></span></div>
           <div class='mb-3'><label>Ngày sinh</label><input asp-for='NgaySinh' type='date' class='form-control' /><span asp-validation-for='NgaySinh' class='text-danger'></span></div>
-          <div class='mb-3'><label>Giới tính</label><select asp-for='GioiTinh' class='form-select'><option value=''>-- Chọn giới tính --</option><option value='Nam'>Nam</option><option value='Nu'>Nữ</option></select><span asp-validation-for='GioiTinh' class='text-danger'></span></div>
+          <div class='mb-3'><label>Giới tính</label><select asp-for='GioiTinh' class='form-select'><option value=''>-- Chọn giới tính --</option><option value='Nam'>Nam</option><option value='Nữ'>Nữ</option></select><span asp-validation-for='GioiTinh' class='text-danger'></span></div>
           <div class='mb-3'><label>Địa chỉ</label><input asp-for='DiaChi' class='form-control' /><span asp-validation-for='DiaChi' class='text-danger'></span></div>
           <div class='mb-3'>
               <label>Vai trò</label>
               <select asp-for='VaiTro' class='form-select'>
                   <option value=''>-- Chọn vai trò --</option>
-                  <option value='Giao dich vien'>Giao dịch viên</option>
-                  <option value='Nhan vien tin dung'>Nhân viên tín dụng</option>
-                  <option value='Nhan vien thu no'>Nhân viên thu nợ</option>
-                  <option value='Kiem soat vien'>Kiểm soát viên</option>
-                  <option value='Truong phong'>Trưởng phòng</option>
-                  <option value='Quan tri he thong'>Quản trị hệ thống</option>
+                  <option value='Giao dịch viên'>Giao dịch viên</option>
+                  <option value='Nhân viên tin dung'>Nhân viên tín dụng</option>
+                  <option value='Nhân viên thu no'>Nhân viên thu nợ</option>
+                  <option value='Kiểm soát viên'>Kiểm soát viên</option>
+                  <option value='Trưởng phòng'>Trưởng phòng</option>
+                  <option value='Quản trị hệ thống'>Quản trị hệ thống</option>
               </select>
               <span asp-validation-for='VaiTro' class='text-danger'></span>
           </div>

@@ -1,123 +1,317 @@
 @model BTL_PTTKHDT.Models.KhachHang
-@{ ViewData["Title"] = "Sửa khách hàng"; }
-<div class='container-fluid'>
-  <h2>Sửa khách hàng: @Model.HoTen</h2>
-  <div class="card p-3">
-      <form asp-action='Edit' method='post' enctype='multipart/form-data'>
-          <div asp-validation-summary="All" class="text-danger mb-3 font-weight-bold"></div>
-          <input type="hidden" asp-for="MaKh" />
-          <div class='mb-3'>
-              <label>Mã khách hàng</label>
-              <input class='form-control' value='@Model.MaKh' readonly />
-          </div>
-          <div class='mb-3'><label>Họ tên</label><input asp-for='HoTen' class='form-control' /><span asp-validation-for='HoTen' class='text-danger'></span></div>
-          <div class='mb-3'><label>CMND/CCCD</label><input asp-for='CmndCccd' class='form-control' maxlength="12" inputmode="numeric" /><span asp-validation-for='CmndCccd' class='text-danger'></span></div>
-          <div class='mb-3'><label>SĐT</label><input asp-for='SoDienThoai' class='form-control' maxlength="10" inputmode="numeric" /><span asp-validation-for='SoDienThoai' class='text-danger'></span></div>
-          <div class='mb-3'><label>Ngày sinh</label><input asp-for='NgaySinh' type='date' class='form-control' /><span asp-validation-for='NgaySinh' class='text-danger'></span></div>
-          <div class='mb-3'><label>Email</label><input asp-for='Email' type='email' class='form-control' /><span asp-validation-for='Email' class='text-danger'></span></div>
-          <div class='mb-3'><label>Địa chỉ</label><input asp-for='DiaChi' class='form-control' /><span asp-validation-for='DiaChi' class='text-danger'></span></div>
-          <div class='mb-3'><label>Loại khách hàng</label><input asp-for='LoaiKhachHang' class='form-control' /><span asp-validation-for='LoaiKhachHang' class='text-danger'></span></div>
-          <div class='mb-3'>
-              <label>Ảnh đại diện (chọn file mới nếu muốn đổi)</label>
-              <input type='file' name='AnhDaiDienFile' class='form-control' accept='image/*' />
-              <div class='form-text'>Khách hàng doanh nghiệp có thể không cần ảnh đại diện.</div>
-              @Html.ValidationMessage("AnhDaiDienFile", "", new { @class = "text-danger" })
-          </div>
-          <div class='mb-3'>
-              <div class="form-check">
-                  <input class="form-check-input" type="checkbox" asp-for="IsActive" />
-                  <label class="form-check-label" asp-for="IsActive">Hoạt động</label>
-              </div>
-          </div>
-          <button type='submit' class='btn btn-primary'>Lưu</button>
-          <a asp-action='Index' class='btn btn-secondary'>Hủy</a>
-      </form>
-  </div>
+@{
+    ViewData["Title"] = "Sua khach hang";
+    var credit = ViewData["CreditHistory"] as BTL_PTTKHDT.Models.LichSuTinDung;
+    var creditClass = credit?.DiemTinDung >= 700 ? "text-success" : credit?.DiemTinDung >= 500 ? "text-warning" : "text-danger";
+    var assets = ViewData["CustomerAssets"] as IEnumerable<BTL_PTTKHDT.Models.TaiSanKhachHang>;
+    var assetList = assets?.ToList() ?? new List<BTL_PTTKHDT.Models.TaiSanKhachHang>();
+    var activePledgedAssetIds = ViewData["ActivePledgedAssetIds"] as HashSet<string> ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+}
 
-  <div class="card p-3 mt-3">
-      <div class="d-flex align-items-center justify-content-between">
-          <h5 class="mb-0">Tài sản khách hàng</h5>
-          <span class="text-secondary small">@Model.MaKh</span>
-      </div>
+<div class="container-fluid customer-edit-page">
+    <div class="page-hero mb-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h2 class="page-hero-title">Sua khach hang: @Model.HoTen</h2>
+                <div class="page-hero-subtitle small">Quản lý hồ sơ, điểm tín dụng và tài sản bảo đảm của khách hàng.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="status-chip status-chip-info">@Model.MaKh</span>
+                <span class="status-chip @(Model.IsActive ? "status-chip-success" : "status-chip-muted")">@(Model.IsActive ? "Hoạt động" : "Tạm khóa")</span>
+            </div>
+        </div>
+    </div>
 
-      @if (TempData["AssetError"] != null)
-      {
-          <div class="alert alert-danger mt-3 mb-0">@TempData["AssetError"]</div>
-      }
+    <div class="card section-card p-3">
+        <div class="section-card-title mb-3">
+            <i class="bi bi-person-vcard"></i>
+            <span>Thông tin khách hàng</span>
+        </div>
+        <form asp-action="Edit" method="post" enctype="multipart/form-data">
+            <div asp-validation-summary="All" class="text-danger mb-3 fw-semibold"></div>
+            <input type="hidden" asp-for="MaKh" />
 
-      <form asp-action="AddAsset" asp-route-id="@Model.MaKh" method="post" class="border rounded-3 p-3 mt-3">
-          @Html.AntiForgeryToken()
-          <div class="row g-2">
-              <div class="col-md-4">
-                  <label class="form-label small text-secondary mb-1">Loại tài sản</label>
-                  <input name="LoaiTaiSan" class="form-control form-control-sm" />
-              </div>
-              <div class="col-md-3">
-                  <label class="form-label small text-secondary mb-1">Giá trị khai báo</label>
-                  <input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" />
-              </div>
-              <div class="col-md-2">
-                  <label class="form-label small text-secondary mb-1">Tỷ lệ LTV</label>
-                  <input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" />
-              </div>
-              <div class="col-md-3 d-flex align-items-end">
-                  <button class="btn btn-sm btn-primary w-100" type="submit">Thêm tài sản</button>
-              </div>
-              <div class="col-md-6">
-                  <label class="form-label small text-secondary mb-1">Giấy tờ pháp lý</label>
-                  <input name="GiayToPhapLy" class="form-control form-control-sm" />
-              </div>
-              <div class="col-md-6">
-                  <label class="form-label small text-secondary mb-1">Mô tả</label>
-                  <input name="MoTa" class="form-control form-control-sm" />
-              </div>
-          </div>
-      </form>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Mã khách hàng</label>
+                    <input class="form-control" value="@Model.MaKh" readonly />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="LoaiKhachHang" class="form-label">Loại khách hàng</label>
+                    <select asp-for="LoaiKhachHang" class="form-select js-customer-type">
+                        <option value="Cá nhân">Cá nhân</option>
+                        <option value="Doanh nghiệp">Doanh nghiệp</option>
+                    </select>
+                    <span asp-validation-for="LoaiKhachHang" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="HoTen" class="form-label js-name-label">Họ tên</label>
+                    <input asp-for="HoTen" class="form-control" />
+                    <span asp-validation-for="HoTen" class="text-danger"></span>
+                </div>
 
-      @{
-          var assets = ViewData["CustomerAssets"] as IEnumerable<BTL_PTTKHDT.Models.TaiSanKhachHang>;
-          var list = assets?.ToList() ?? new List<BTL_PTTKHDT.Models.TaiSanKhachHang>();
-      }
+                <div class="col-md-4">
+                    <label asp-for="CmndCccd" class="form-label js-id-label">CMND/CCCD</label>
+                    <input asp-for="CmndCccd" class="form-control" maxlength="20" inputmode="numeric" />
+                    <span asp-validation-for="CmndCccd" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="SoDienThoai" class="form-label">Số điện thoại</label>
+                    <input asp-for="SoDienThoai" class="form-control" maxlength="15" inputmode="numeric" />
+                    <span asp-validation-for="SoDienThoai" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="NgaySinh" class="form-label js-date-label">Ngày sinh</label>
+                    <input asp-for="NgaySinh" type="date" class="form-control" />
+                    <span asp-validation-for="NgaySinh" class="text-danger"></span>
+                </div>
 
-      @if (list.Count == 0)
-      {
-          <div class="text-secondary mt-3">Chưa có tài sản.</div>
-      }
-      else
-      {
-          <div class="table-responsive mt-3">
-              <table class="table table-sm align-middle mb-0">
-                  <thead>
-                      <tr class="text-secondary small">
-                          <th>Mã</th>
-                          <th>Loại</th>
-                          <th class="text-end">Khai báo</th>
-                          <th class="text-end">Định giá</th>
-                          <th class="text-center">LTV</th>
-                          <th class="text-center">Trạng thái</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      @foreach (var ts in list)
-                      {
-                          <tr>
-                              <td class="fw-semibold">@ts.MaTaiSanKh</td>
-                              <td>
-                                  <div class="fw-semibold">@ts.LoaiTaiSan</div>
-                                  @if (!string.IsNullOrWhiteSpace(ts.MoTa))
-                                  {
-                                      <div class="text-secondary small">@ts.MoTa</div>
-                                  }
-                              </td>
-                              <td class="text-end">@ts.GiaTriKhaiBao.ToString("N0")</td>
-                              <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? ts.GiaTriDinhGia.Value.ToString("N0") : "-")</td>
-                              <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
-                              <td class="text-center"><span class="badge text-bg-light">@ts.TrangThai</span></td>
-                          </tr>
-                      }
-                  </tbody>
-              </table>
-          </div>
-      }
-  </div>
+                <div class="col-md-4">
+                    <label asp-for="Email" class="form-label">Email</label>
+                    <input asp-for="Email" type="email" class="form-control" />
+                    <span asp-validation-for="Email" class="text-danger"></span>
+                </div>
+                <div class="col-md-8">
+                    <label asp-for="DiaChi" class="form-label">Địa chỉ</label>
+                    <input asp-for="DiaChi" class="form-control" />
+                    <span asp-validation-for="DiaChi" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="business-fields soft-panel p-3 mt-3">
+                <div class="section-card-title mb-2">
+                    <i class="bi bi-buildings"></i>
+                    <span>Thông tin doanh nghiệp</span>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label asp-for="MaSoThue" class="form-label">Mã số thuế</label>
+                        <input asp-for="MaSoThue" class="form-control" maxlength="20" />
+                        <span asp-validation-for="MaSoThue" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="TenNguoiDaiDien" class="form-label">Người đại diện</label>
+                        <input asp-for="TenNguoiDaiDien" class="form-control" />
+                        <span asp-validation-for="TenNguoiDaiDien" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="ChucVuNguoiDaiDien" class="form-label">Chức vụ</label>
+                        <input asp-for="ChucVuNguoiDaiDien" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="NgayThanhLap" class="form-label">Ngày thành lập</label>
+                        <input asp-for="NgayThanhLap" type="date" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="LinhVucKinhDoanh" class="form-label">Lĩnh vực kinh doanh</label>
+                        <input asp-for="LinhVucKinhDoanh" class="form-control" />
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="SoLaoDong" class="form-label">Số lao động</label>
+                        <input asp-for="SoLaoDong" class="form-control" inputmode="numeric" />
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="DoanhThuBinhQuanThang" class="form-label">Doanh thu bình quân tháng</label>
+                        <input asp-for="DoanhThuBinhQuanThang" class="form-control" inputmode="numeric" />
+                        <span asp-validation-for="DoanhThuBinhQuanThang" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="LoiNhuanBinhQuanThang" class="form-label">Lợi nhuận bình quân tháng</label>
+                        <input asp-for="LoiNhuanBinhQuanThang" class="form-control" inputmode="numeric" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label">Ảnh đại diện</label>
+                <input type="file" name="AnhDaiDienFile" class="form-control" accept="image/*" />
+                <div class="form-text">Khách hàng doanh nghiệp có thể không cần ảnh đại diện.</div>
+                @Html.ValidationMessage("AnhDaiDienFile", "", new { @class = "text-danger" })
+            </div>
+
+            <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" asp-for="IsActive" />
+                <label class="form-check-label" asp-for="IsActive">Hoạt động</label>
+            </div>
+
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary">Lưu</button>
+                <a asp-action="Index" class="btn btn-secondary">Hủy</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="card section-card p-3 mt-3">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+                <div class="section-card-title">
+                    <i class="bi bi-activity"></i>
+                    <span>Điểm tín dụng</span>
+                </div>
+                <div class="text-secondary small">Căn cứ đánh giá cho các lần vay sau</div>
+            </div>
+            <span class="status-chip status-chip-info">@Model.MaKh</span>
+        </div>
+
+        @if (TempData["CreditError"] != null)
+        {
+            <div class="alert alert-danger">@TempData["CreditError"]</div>
+        }
+        @if (TempData["CreditSuccess"] != null)
+        {
+            <div class="alert alert-success">@TempData["CreditSuccess"]</div>
+        }
+
+        <div class="row g-3 align-items-stretch">
+            <div class="col-md-4">
+                <div class="metric-tile">
+                    <div class="text-secondary small">Diem hien tai</div>
+                    <div class="display-6 fw-semibold @creditClass">@(credit?.DiemTinDung.ToString() ?? "650")</div>
+                    <div class="text-secondary small">Xếp hạng: <span class="fw-semibold">@(credit?.XepHangRuiRo ?? "BBB")</span></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="metric-tile">
+                    <div class="text-secondary small">Số lần trả trễ</div>
+                    <div class="h3 mb-1">@(credit?.SoLanTraTre ?? 0)</div>
+                    <div class="text-secondary small">Tỷ lệ nợ/nguồn tiền: @(credit?.TyLeNoThuNhap.HasValue == true ? $"{credit.TyLeNoThuNhap.Value * 100:0.#}%" : "Chưa có")</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <form asp-action="UpdateCreditIncome" asp-route-id="@Model.MaKh" method="post" class="metric-tile">
+                    @Html.AntiForgeryToken()
+                    <label class="form-label small text-secondary mb-1 js-income-label">Thu nhập/doanh thu tháng</label>
+                    <input name="thuNhapHangThang" class="form-control form-control-sm mb-2" inputmode="numeric" value="@(credit?.ThuNhapHangThang?.ToString("0") ?? "")" />
+                    <button class="btn btn-sm btn-outline-primary w-100" type="submit">Cap nhat va tinh lai</button>
+                </form>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(credit?.GhiChu))
+        {
+            <div class="text-secondary small mt-3">@credit.GhiChu</div>
+        }
+    </div>
+
+    <div class="card section-card p-3 mt-3">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <div class="section-card-title">
+                    <i class="bi bi-house-lock"></i>
+                    <span>Tài sản khách hàng</span>
+                </div>
+                <div class="text-secondary small">Tài sản đã bán sẽ không được tính vào hồ sơ vay mới.</div>
+            </div>
+            <span class="status-chip status-chip-muted">@assetList.Count tai san</span>
+        </div>
+
+        @if (TempData["AssetError"] != null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@TempData["AssetError"]</div>
+        }
+
+        <form asp-action="AddAsset" asp-route-id="@Model.MaKh" method="post" class="asset-form-panel p-3 mt-3">
+            @Html.AntiForgeryToken()
+            <div class="row g-2">
+                <div class="col-md-4"><label class="form-label small text-secondary mb-1">Loại tài sản</label><input name="LoaiTaiSan" class="form-control form-control-sm" /></div>
+                <div class="col-md-3"><label class="form-label small text-secondary mb-1">Gia tri khai bao</label><input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" /></div>
+                <div class="col-md-2"><label class="form-label small text-secondary mb-1">Ty le LTV</label><input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" /></div>
+                <div class="col-md-3 d-flex align-items-end"><button class="btn btn-sm btn-primary w-100" type="submit">Thêm tài sản</button></div>
+                <div class="col-md-6"><label class="form-label small text-secondary mb-1">Giấy tờ pháp lý</label><input name="GiayToPhapLy" class="form-control form-control-sm" /></div>
+                <div class="col-md-6"><label class="form-label small text-secondary mb-1">Mo ta</label><input name="MoTa" class="form-control form-control-sm" /></div>
+            </div>
+        </form>
+
+        @if (assetList.Count == 0)
+        {
+            <div class="text-secondary mt-3">Chưa có tai san.</div>
+        }
+        else
+        {
+            <div class="table-responsive mt-3">
+                <table class="table table-sm align-middle mb-0 asset-table">
+                    <thead>
+                        <tr class="text-secondary small">
+                            <th>Ma</th>
+                            <th>Loai</th>
+                            <th class="text-end">Khai bao</th>
+                            <th class="text-end">Định giá</th>
+                            <th class="text-center">LTV</th>
+                            <th class="text-center">Định giá</th>
+                            <th class="text-center">Sở hữu</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var ts in assetList)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@ts.MaTaiSanKh</td>
+                            <td>
+                                <div class="fw-semibold">@ts.LoaiTaiSan</div>
+                                @if (!string.IsNullOrWhiteSpace(ts.MoTa))
+                                {
+                                    <div class="text-secondary small">@ts.MoTa</div>
+                                }
+                            </td>
+                            <td class="text-end">@ts.GiaTriKhaiBao.ToString("N0")</td>
+                            <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? ts.GiaTriDinhGia.Value.ToString("N0") : "-")</td>
+                            <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
+                            <td class="text-center"><span class="status-chip status-chip-muted">@ts.TrangThai</span></td>
+                            <td class="text-center">
+                                <span class="status-chip @(ts.TrangThaiSoHuu == "Đã bán" ? "status-chip-warning" : "status-chip-success")">@ts.TrangThaiSoHuu</span>
+                                @if (ts.NgayBan.HasValue)
+                                {
+                                    <div class="text-secondary small">@ts.NgayBan.Value.ToString("dd/MM/yyyy")</div>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (ts.TrangThaiSoHuu == "Đã bán")
+                                {
+                                    <span class="status-chip status-chip-muted">Không con so huu</span>
+                                }
+                                else if (activePledgedAssetIds.Contains(ts.MaTaiSanKh))
+                                {
+                                    <span class="status-chip status-chip-warning">Đang thế chấp</span>
+                                }
+                                else
+                                {
+                                    <form asp-action="MarkAssetSold" asp-route-id="@Model.MaKh" asp-route-maTaiSanKh="@ts.MaTaiSanKh" method="post" onsubmit="return confirm('Ghi nhận khách hàng đã bán tài sản này?');">
+                                        @Html.AntiForgeryToken()
+                                        <button class="btn btn-sm btn-outline-warning" type="submit">Đã bán</button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const type = document.querySelector('.js-customer-type');
+            const business = document.querySelector('.business-fields');
+            const nameLabel = document.querySelector('.js-name-label');
+            const idLabel = document.querySelector('.js-id-label');
+            const dateLabel = document.querySelector('.js-date-label');
+            const incomeLabel = document.querySelector('.js-income-label');
+
+            function sync() {
+                const isBusiness = (type.value || '').toLowerCase().includes('doanh');
+                business.style.display = isBusiness ? '' : 'none';
+                nameLabel.textContent = isBusiness ? 'Tên doanh nghiệp' : 'Họ tên';
+                idLabel.textContent = isBusiness ? 'Mã số đăng ký/CCCD đại diện' : 'CMND/CCCD';
+                dateLabel.textContent = isBusiness ? 'Ngày sinh người đại diện' : 'Ngày sinh';
+                incomeLabel.textContent = isBusiness ? 'Doanh thu bình quân tháng' : 'Thu nhập hàng tháng';
+            }
+
+            type.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+}

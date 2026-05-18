@@ -21,13 +21,26 @@
     </div>
 </div>
 
+@if (TempData["CustomerSuccess"] != null)
+{
+    <div class="alert alert-success">@TempData["CustomerSuccess"]</div>
+}
+@if (TempData["CustomerWarning"] != null)
+{
+    <div class="alert alert-warning">@TempData["CustomerWarning"]</div>
+}
+@if (TempData["CustomerError"] != null)
+{
+    <div class="alert alert-danger">@TempData["CustomerError"]</div>
+}
+
 <form method="get" class="card mb-3">
     <div class="card-body">
         <div class="row g-2 align-items-center">
             <div class="col-12 col-lg-5">
                 <div class="input-group">
                     <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                    <input name="q" value="@Model.Query" class="form-control" placeholder="Tìm kiếm theo mã, họ tên, SDT..." />
+                    <input name="q" value="@Model.Query" class="form-control" placeholder="Tìm kiếm theo mã, họ tên, SĐT..." />
                 </div>
             </div>
 
@@ -72,26 +85,29 @@
                              style="cursor: pointer;"
                              onclick="window.location='@Url.Action("Edit", new { id = row.MaKh })'">
                             <!-- Avatar Section -->
-                            <div class="position-relative" style="height: 180px; border-radius: 8px 8px 0 0; overflow: hidden;">
-                                @if (!string.IsNullOrWhiteSpace(row.AnhDaiDienUrl))
-                                {
-                                    <img src="@row.AnhDaiDienUrl" alt="@row.HoTen" class="w-100 h-100" style="object-fit: cover;">
-                                }
-                                else
-                                {
-                                    <div class="w-100 h-100 d-flex align-items-center justify-content-center avatar-placeholder">
-                                        @if (row.LoaiKhachHangKind == "business")
-                                        {
-                                            <i class="bi bi-buildings avatar-icon"></i>
-                                        }
-                                        else
-                                        {
-                                            <i class="bi bi-person-circle avatar-icon"></i>
-                                        }
-                                    </div>
-                                }
+                            <div class="profile-card-head position-relative">
+                                <div class="profile-card-cover"></div>
+                                <div class="profile-avatar-wrap">
+                                    @if (!string.IsNullOrWhiteSpace(row.AnhDaiDienUrl))
+                                    {
+                                        <img src="@row.AnhDaiDienUrl" alt="@row.HoTen" class="profile-avatar-img">
+                                    }
+                                    else
+                                    {
+                                        <div class="profile-avatar-placeholder">
+                                            @if (row.LoaiKhachHangKind == "business")
+                                            {
+                                                <i class="bi bi-buildings"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-person"></i>
+                                            }
+                                        </div>
+                                    }
+                                </div>
                                 <!-- Badge loại KH -->
-                                <span class="badge kh-type-badge position-absolute" style="top: 10px; right: 10px;">
+                                <span class="badge kh-type-badge position-absolute" style="top: 12px; right: 12px;">
                                     @if (row.LoaiKhachHangKind == "business")
                                     {
                                         <i class="bi bi-buildings me-1"></i>
@@ -103,7 +119,7 @@
                                     @row.LoaiKhachHangText
                                 </span>
                                 <!-- Status Badge -->
-                                <div class="position-absolute" style="bottom: 10px; left: 10px;">
+                                <div class="position-absolute" style="bottom: 12px; right: 12px;">
                                     @if (row.IsActive)
                                     {
                                         <span class="badge status-badge-active">
@@ -120,7 +136,7 @@
                             </div>
 
                             <!-- Card Body -->
-                            <div class="card-body pb-2">
+                            <div class="card-body profile-card-body pb-2">
                                 <div class="mb-2">
                                     <h6 class="card-title mb-0 text-truncate fw-semibold">@row.HoTen</h6>
                                     <small class="text-muted">Mã: @row.MaKhText</small>
@@ -146,7 +162,7 @@
                                         <div class="info-row">
                                             <span class="info-label"><i class="bi bi-star me-1"></i>Điểm tín dụng</span>
                                             <span class="info-value fw-semibold @(row.DiemTinDung >= 700 ? "credit-good" : row.DiemTinDung >= 500 ? "credit-medium" : "credit-bad")">
-                                                @row.DiemTinDung
+                                                @row.DiemTinDung @(string.IsNullOrWhiteSpace(row.XepHangRuiRo) ? "" : $"({row.XepHangRuiRo})")
                                             </span>
                                         </div>
                                     }
@@ -212,14 +228,62 @@
     .hover-card {
         transition: transform 0.25s ease, box-shadow 0.25s ease;
         border-radius: 12px !important;
+        border: 1px solid #e5e7eb !important;
         overflow: hidden;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06) !important;
     }
     .hover-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 28px rgba(0,0,0,0.12) !important;
+        transform: translateY(-4px);
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12) !important;
     }
 
     /* ── Avatar placeholder ── */
+    .profile-card-head {
+        height: 118px;
+        border-radius: 12px 12px 0 0;
+        overflow: visible;
+        background: #f8fafc;
+    }
+    .profile-card-cover {
+        height: 92px;
+        border-radius: 12px 12px 28px 28px;
+        background:
+            linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(20, 184, 166, 0.16)),
+            linear-gradient(90deg, #f8fafc, #eef2f7);
+        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.72);
+    }
+    .profile-avatar-wrap {
+        position: absolute;
+        left: 18px;
+        bottom: -28px;
+        width: 84px;
+        height: 84px;
+        border-radius: 999px;
+        padding: 4px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    }
+    .profile-avatar-img,
+    .profile-avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        object-fit: cover;
+    }
+    .profile-avatar-placeholder {
+        background: linear-gradient(135deg, #e0f2fe 0%, #f1f5f9 52%, #ccfbf1 100%);
+        color: #2563eb;
+        font-size: 2.25rem;
+    }
+    .profile-card-body {
+        padding-top: 2.25rem;
+    }
+
     .avatar-placeholder {
         background: linear-gradient(135deg, #e8eef7 0%, #d0daea 100%);
     }
@@ -280,8 +344,8 @@
     .card-action-bar {
         display: flex;
         align-items: stretch;
-        border-top: 1px solid #f1f5f9;
-        background: #fafbfc;
+        border-top: 1px solid #e5e7eb;
+        background: #f8fafc;
     }
     .action-btn {
         flex: 1;

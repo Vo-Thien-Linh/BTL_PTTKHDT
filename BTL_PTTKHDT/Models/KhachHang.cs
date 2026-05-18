@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace BTL_PTTKHDT.Models;
@@ -22,6 +22,22 @@ public partial class KhachHang
     public string LoaiKhachHang { get; set; } = null!;
 
     public string? AnhDaiDienUrl { get; set; }
+
+    public string? MaSoThue { get; set; }
+
+    public string? TenNguoiDaiDien { get; set; }
+
+    public string? ChucVuNguoiDaiDien { get; set; }
+
+    public DateOnly? NgayThanhLap { get; set; }
+
+    public string? LinhVucKinhDoanh { get; set; }
+
+    public decimal? DoanhThuBinhQuanThang { get; set; }
+
+    public decimal? LoiNhuanBinhQuanThang { get; set; }
+
+    public int? SoLaoDong { get; set; }
 
     public DateTime NgayTao { get; set; }
 

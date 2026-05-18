@@ -1,10 +1,29 @@
 using Microsoft.EntityFrameworkCore;
 using BTL_PTTKHDT.Models;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 builder.Services.AddDbContext<QltdnhContext>(options =>
 {
@@ -14,6 +33,9 @@ builder.Services.AddDbContext<QltdnhContext>(options =>
 });
 
 builder.Services.AddScoped<BTL_PTTKHDT.Services.IDashboardService, BTL_PTTKHDT.Services.DashboardService>();
+builder.Services.AddScoped<BTL_PTTKHDT.Services.ICreditScoreService, BTL_PTTKHDT.Services.CreditScoreService>();
+builder.Services.Configure<BTL_PTTKHDT.Services.GmailSmtpOptions>(builder.Configuration.GetSection("GmailSmtp"));
+builder.Services.AddScoped<BTL_PTTKHDT.Services.IEmailSender, BTL_PTTKHDT.Services.GmailEmailSender>();
 
 var app = builder.Build();
 
@@ -29,6 +51,7 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();

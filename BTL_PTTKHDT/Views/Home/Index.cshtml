@@ -1,4 +1,4 @@
-﻿@model BTL_PTTKHDT.Models.DashboardViewModel
+@model BTL_PTTKHDT.Models.DashboardViewModel
 
 @{
     ViewData["Title"] = "Bảng điều khiển";
@@ -31,6 +31,41 @@
             </div>
         </div>
     }
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card app-mini-stat h-100">
+            <div class="card-body">
+                <div class="text-secondary small">Giải ngân năm @Model.SelectedYear</div>
+                <div class="fs-5 fw-semibold mt-1">@Model.Totals.DisbursedThisYearText</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card app-mini-stat h-100">
+            <div class="card-body">
+                <div class="text-secondary small">Thu nợ tháng này</div>
+                <div class="fs-5 fw-semibold mt-1">@Model.Totals.CollectedThisMonthText</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card app-mini-stat h-100">
+            <div class="card-body">
+                <div class="text-secondary small">Kỳ trả nợ quá hạn</div>
+                <div class="fs-5 fw-semibold mt-1">@Model.Totals.OverdueScheduleCount.ToString("N0")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card app-mini-stat h-100">
+            <div class="card-body">
+                <div class="text-secondary small">Khách hàng đang hoạt động</div>
+                <div class="fs-5 fw-semibold mt-1">@Model.Totals.ActiveCustomerCount.ToString("N0")</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row g-3">
@@ -67,24 +102,128 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div class="fw-semibold">Đơn vay mới nhất</div>
-                    <a class="text-decoration-none" href="#">Xem tất cả</a>
+                    <a class="text-decoration-none" asp-controller="Loan" asp-action="Index">Xem tất cả</a>
                 </div>
 
                 <div class="list-group list-group-flush">
-                    @foreach (var item in Model.LatestLoans)
+                    @if (Model.LatestLoans.Count == 0)
                     {
-                        <div class="list-group-item px-0">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="me-2">
-                                    <div class="fw-semibold">@item.CustomerName</div>
-                                    <div class="text-secondary small">@item.Code</div>
+                        <div class="text-secondary small">Chưa có đơn vay nào.</div>
+                    }
+                    else
+                    {
+                        foreach (var item in Model.LatestLoans)
+                        {
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="me-2">
+                                        <div class="fw-semibold">@item.CustomerName</div>
+                                        <div class="text-secondary small">@item.Code</div>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-@item.StatusKind">@item.StatusText</span>
                                 </div>
-                                <span class="badge rounded-pill text-bg-@item.StatusKind">@item.StatusText</span>
+                                <div class="text-secondary small mt-1">@item.AmountText</div>
                             </div>
-                            <div class="text-secondary small mt-1">@item.AmountText</div>
-                        </div>
+                        }
                     }
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-0">
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="fw-semibold mb-3">Cơ cấu khoản vay</div>
+
+                @if (Model.LoanStatusSummary.Count == 0)
+                {
+                    <div class="text-secondary small">Chưa có khoản vay nào.</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var item in Model.LoanStatusSummary)
+                        {
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge rounded-pill text-bg-@item.StatusKind">@item.StatusText</span>
+                                    <span class="fw-semibold">@item.Count.ToString("N0")</span>
+                                </div>
+                                <div class="text-secondary small mt-1">@item.OutstandingText</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-semibold">Lịch trả nợ quá hạn</div>
+                    <a class="text-decoration-none" asp-controller="Debt" asp-action="Index">Xem nợ</a>
+                </div>
+
+                @if (Model.OverdueSchedules.Count == 0)
+                {
+                    <div class="text-secondary small">Không có kỳ trả nợ quá hạn.</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var item in Model.OverdueSchedules)
+                        {
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div>
+                                        <div class="fw-semibold">@item.CustomerName</div>
+                                        <div class="text-secondary small">@item.LoanCode - hạn @item.DueDateText</div>
+                                    </div>
+                                    <span class="badge text-bg-danger">@item.DaysOverdue ngày</span>
+                                </div>
+                                <div class="text-secondary small mt-1">@item.AmountText</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="fw-semibold mb-3">Thanh toán gần đây</div>
+
+                @if (Model.RecentPayments.Count == 0)
+                {
+                    <div class="text-secondary small">Chưa có giao dịch thanh toán.</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var item in Model.RecentPayments)
+                        {
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div>
+                                        <div class="fw-semibold">@item.CustomerName</div>
+                                        <div class="text-secondary small">@item.LoanCode - @item.PaidDateText</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-semibold">@item.AmountText</div>
+                                        <div class="text-secondary small">@item.Method</div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>

@@ -1,6 +1,57 @@
-﻿@{
-    ViewData["Title"] = "Privacy Policy";
+@model ChangePasswordViewModel
+@{
+    ViewData["Title"] = "Cai dat";
 }
-<h1>@ViewData["Title"]</h1>
 
-<p>Use this page to detail your site's privacy policy.</p>
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-7 col-xl-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="app-kpi-icon app-kpi-icon--primary rounded-3 d-flex align-items-center justify-content-center">
+                            <i class="bi bi-shield-lock"></i>
+                        </div>
+                        <div>
+                            <h3 class="mb-1">Doi mat khau</h3>
+                            <div class="text-secondary">Cap nhat mat khau dang nhap cua tai khoan hien tai.</div>
+                        </div>
+                    </div>
+
+                    @if (TempData["PasswordChanged"] is string message)
+                    {
+                        <div class="alert alert-success">@message</div>
+                    }
+
+                    <form asp-action="Privacy" method="post">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="mb-3">
+                            <label asp-for="CurrentPassword" class="form-label"></label>
+                            <input asp-for="CurrentPassword" class="form-control" autocomplete="current-password" />
+                            <span asp-validation-for="CurrentPassword" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="NewPassword" class="form-label"></label>
+                            <input asp-for="NewPassword" class="form-control" autocomplete="new-password" />
+                            <span asp-validation-for="NewPassword" class="text-danger small"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="ConfirmPassword" class="form-label"></label>
+                            <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                            <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check2-circle me-2"></i>
+                            Lưu mat khau mới
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

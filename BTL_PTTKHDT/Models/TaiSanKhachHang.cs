@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace BTL_PTTKHDT.Models;
@@ -28,6 +28,12 @@ public partial class TaiSanKhachHang
     public string? MaNvdinhGia { get; set; }
 
     public string TrangThai { get; set; } = null!;
+
+    public string TrangThaiSoHuu { get; set; } = null!;
+
+    public DateOnly? NgayBan { get; set; }
+
+    public string? GhiChuSoHuu { get; set; }
 
     public virtual KhachHang MaKhNavigation { get; set; } = null!;
 

@@ -1,4 +1,5 @@
-using BTL_PTTKHDT.Models;
+﻿using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +49,11 @@ namespace BTL_PTTKHDT.Controllers
             
             if (!string.IsNullOrWhiteSpace(q)) {
                 var terms = q.Trim();
-                query = query.Where(x => x.HoTen.Contains(terms) || x.SoDienThoai.Contains(terms) || x.VaiTro.Contains(terms));
+                query = query.Where(x =>
+                    x.HoTen.Contains(terms)
+                    || x.SoDienThoai.Contains(terms)
+                    || x.VaiTro.Contains(terms)
+                    || (x.Email != null && x.Email.Contains(terms)));
             }
             
             var total = await query.CountAsync(ct);
@@ -107,9 +112,24 @@ namespace BTL_PTTKHDT.Controllers
             return $"NV{(maxId + 1):000}";
         }
 
+        private async Task<string> GetNextAccountCodeAsync(CancellationToken ct)
+        {
+            var existingCodes = await _db.TaiKhoanNhanViens
+                .AsNoTracking()
+                .Select(x => x.MaTaiKhoan)
+                .ToListAsync(ct);
+
+            var maxId = existingCodes
+                .Select(x => ParseCodeSuffix(x, "TK"))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            return $"TK{(maxId + 1):000}";
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(NhanVien m, IFormFile? AnhDaiDienFile, CancellationToken ct = default)
+        public async Task<IActionResult> Create(NhanVien m, IFormFile? AnhDaiDienFile, string? matKhau, CancellationToken ct = default)
         {
             if (!IsValidCode(m.MaNv, "NV", 3))
             {
@@ -123,19 +143,37 @@ namespace BTL_PTTKHDT.Controllers
                 ModelState.AddModelError(nameof(AnhDaiDienFile), "Ảnh đại diện nhân viên là bắt buộc.");
             }
 
+            if (string.IsNullOrWhiteSpace(matKhau) || matKhau.Length < 6)
+            {
+                ModelState.AddModelError("matKhau", "Mat khau ban dau phai co it nhat 6 ky tu.");
+            }
+
             if (!ModelState.IsValid)
             {
                 return View(m);
             }
 
             try {
+                var initialPassword = matKhau!.Trim();
                 m.NgayTao = DateTime.Now; m.IsActive = true;
                 m.AnhDaiDienUrl = await SaveAvatarAsync(AnhDaiDienFile, ct) ?? m.AnhDaiDienUrl;
-                _db.NhanViens.Add(m); await _db.SaveChangesAsync();
+                _db.NhanViens.Add(m);
+                _db.TaiKhoanNhanViens.Add(new TaiKhoanNhanVien
+                {
+                    MaTaiKhoan = await GetNextAccountCodeAsync(ct),
+                    MaNv = m.MaNv,
+                    TenDangNhap = m.SoDienThoai,
+                    MatKhauHash = PasswordHashing.Hash(initialPassword),
+                    SoLanSaiMatKhau = 0,
+                    BiKhoa = false,
+                    NgayTao = DateTime.Now,
+                    NgayCapNhat = DateTime.Now
+                });
+                await _db.SaveChangesAsync(ct);
                 return RedirectToAction(nameof(Index));
             } catch (Exception ex) {
                 var innerMsg = ex.InnerException?.Message ?? ex.Message;
-                ModelState.AddModelError(nameof(AnhDaiDienFile), innerMsg);
+                ModelState.AddModelError(nameof(AnhDaiDienFile), "Ảnh đại diện nhân viên là bắt buộc.");
                 return View(m);
             }
         }
@@ -161,22 +199,79 @@ namespace BTL_PTTKHDT.Controllers
             }
 
             try {
-                e.HoTen = m.HoTen; e.SoDienThoai = m.SoDienThoai; e.DiaChi = m.DiaChi; e.NgaySinh = m.NgaySinh; e.GioiTinh = m.GioiTinh; e.VaiTro = m.VaiTro; e.IsActive = m.IsActive;
+                e.HoTen = m.HoTen; e.SoDienThoai = m.SoDienThoai; e.Email = m.Email; e.DiaChi = m.DiaChi; e.NgaySinh = m.NgaySinh; e.GioiTinh = m.GioiTinh; e.VaiTro = m.VaiTro; e.IsActive = m.IsActive;
+                var account = await _db.TaiKhoanNhanViens.FirstOrDefaultAsync(x => x.MaNv == e.MaNv, ct);
+                if (account != null)
+                {
+                    account.TenDangNhap = m.SoDienThoai;
+                    account.NgayCapNhat = DateTime.Now;
+                }
                 var newAvatarUrl = await SaveAvatarAsync(AnhDaiDienFile, ct);
                 if (!string.IsNullOrWhiteSpace(newAvatarUrl)) e.AnhDaiDienUrl = newAvatarUrl;
                 await _db.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             } catch (Exception ex) {
                 var innerMsg = ex.InnerException?.Message ?? ex.Message;
-                ModelState.AddModelError(nameof(AnhDaiDienFile), innerMsg);
+                ModelState.AddModelError(nameof(AnhDaiDienFile), "Ảnh đại diện nhân viên là bắt buộc.");
                 return View(m);
             }
         }
 
         public async Task<IActionResult> Delete(string id) => View(await _db.NhanViens.FindAsync(id));
-        [HttpPost, ActionName("Delete")] public async Task<IActionResult> DeleteConfirmed(string id) {
+
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(string id, CancellationToken ct = default) {
             var e = await _db.NhanViens.FindAsync(id);
-            if(e!=null){ _db.NhanViens.Remove(e); await _db.SaveChangesAsync(); }
+            if(e!=null)
+            {
+                var hasRelatedData = await _db.DonVays.AsNoTracking().AnyAsync(x => x.MaNvsoan == id, ct)
+                    || await _db.QuyTrinhPheDuyets.AsNoTracking().AnyAsync(x => x.MaNv == id, ct)
+                    || await _db.HopDongTinDungs.AsNoTracking().AnyAsync(x => x.MaNv == id, ct)
+                    || await _db.ThanhToans.AsNoTracking().AnyAsync(x => x.MaNv == id, ct)
+                    || await _db.TaiSanKhachHangs.AsNoTracking().AnyAsync(x => x.MaNvdinhGia == id, ct);
+
+                if (hasRelatedData)
+                {
+                    e.IsActive = false;
+                    var account = await _db.TaiKhoanNhanViens.FirstOrDefaultAsync(x => x.MaNv == id, ct);
+                    if (account != null)
+                    {
+                        account.BiKhoa = true;
+                        account.NgayCapNhat = DateTime.Now;
+                    }
+                    await _db.SaveChangesAsync(ct);
+                    TempData["EmployeeWarning"] = "Nhan vien da co du lieu nghiep vu nen khong xoa vinh vien. Hệ thống da chuyen sang nghi viec va khoa tai khoan.";
+                }
+                else
+                {
+                    try
+                    {
+                        var account = await _db.TaiKhoanNhanViens.FirstOrDefaultAsync(x => x.MaNv == id, ct);
+                        if (account != null) _db.TaiKhoanNhanViens.Remove(account);
+                        _db.NhanViens.Remove(e);
+                        await _db.SaveChangesAsync(ct);
+                        TempData["EmployeeSuccess"] = "Da xoa nhan vien.";
+                    }
+                    catch (DbUpdateException)
+                    {
+                        _db.ChangeTracker.Clear();
+                        var employee = await _db.NhanViens.FirstOrDefaultAsync(x => x.MaNv == id, ct);
+                        if (employee != null)
+                        {
+                            employee.IsActive = false;
+                            var account = await _db.TaiKhoanNhanViens.FirstOrDefaultAsync(x => x.MaNv == id, ct);
+                            if (account != null)
+                            {
+                                account.BiKhoa = true;
+                                account.NgayCapNhat = DateTime.Now;
+                            }
+                            await _db.SaveChangesAsync(ct);
+                        }
+                        TempData["EmployeeWarning"] = "Khong the xoa vinh vien vi nhan vien dang duoc tham chieu. Hệ thống da chuyen sang nghi viec va khoa tai khoan.";
+                    }
+                }
+            }
             return RedirectToAction(nameof(Index));
         }
     }

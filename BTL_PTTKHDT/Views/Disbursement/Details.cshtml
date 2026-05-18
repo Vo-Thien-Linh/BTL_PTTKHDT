@@ -1,0 +1,167 @@
+@model BTL_PTTKHDT.Models.DisbursementDetailViewModel
+@{
+    ViewData["Title"] = ViewData["Title"] ?? "Kiểm tra giải ngân";
+    string Vnd(decimal amount) => amount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) + " VND";
+    var ltv = Model.Loan.TongGiaTriDamBao <= 0 ? 0m : Model.Loan.SoTienYeuCau / Model.Loan.TongGiaTriDamBao;
+}
+
+<div class="container-fluid">
+    <div class="page-hero mb-3">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h2 class="page-hero-title">Kiểm tra giải ngân: @Model.Loan.MaDon</h2>
+                <div class="page-hero-subtitle small">Buoc tach rieng sau phe duyet, truoc khi tao khoan vay va lich tra no.</div>
+            </div>
+            <div class="d-flex gap-2">
+                <a asp-controller="Loan" asp-action="Details" asp-route-id="@Model.Loan.MaDon" class="btn btn-sm btn-outline-secondary">Xem ho so vay</a>
+                <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Quay lai</a>
+            </div>
+        </div>
+    </div>
+
+    @if (TempData["DisburseError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["DisburseError"]</div>
+    }
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card section-card p-3">
+                <div class="section-card-title mb-3">
+                    <i class="bi bi-cash-coin"></i>
+                    <span>Thông tin giải ngân</span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Khách hàng</div>
+                        <div class="fw-semibold">@Model.Loan.TenKhachHang</div>
+                        <div class="text-secondary small">@Model.Loan.MaKh</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-secondary small">Mục đích vay</div>
+                        <div class="fw-semibold">@Model.Loan.MucDichVay</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Số tiền giai ngan</div>
+                        <div class="fw-semibold">@Vnd(Model.Loan.SoTienYeuCau)</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Ky han</div>
+                        <div class="fw-semibold">@Model.Loan.KyHanDeNghi thang</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Lai suat</div>
+                        <div class="fw-semibold">@(Model.Loan.LaiSuatDeNghi.HasValue ? $"{Model.Loan.LaiSuatDeNghi:0.##}%/năm" : "-")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Tong TSDB</div>
+                        <div class="fw-semibold">@Vnd(Model.Loan.TongGiaTriDamBao)</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Hạn mức gợi ý</div>
+                        <div class="fw-semibold">@Vnd(Model.Loan.HanMucGoiY)</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">LTV yêu cầu / TSĐB</div>
+                        <div class="fw-semibold">@(ltv <= 0 ? "-" : $"{ltv * 100m:0.0}%")</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card section-card p-3 mt-3">
+                <div class="section-card-title mb-3">
+                    <i class="bi bi-house-lock"></i>
+                    <span>Tài sản sẽ được ghi nhận thế chấp</span>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Mã TS</th>
+                                <th>Loại tài sản</th>
+                                <th class="text-end">Gia tri</th>
+                                <th class="text-center">LTV</th>
+                                <th class="text-center">Định giá</th>
+                                <th class="text-center">Sở hữu</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.TaiSanDamBao.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-secondary p-4">Chưa có tai san dam bao.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var ts in Model.TaiSanDamBao)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@ts.MaTaiSanKh</td>
+                                    <td>
+                                        <div class="fw-semibold">@ts.LoaiTaiSan</div>
+                                        <div class="text-secondary small">@(string.IsNullOrWhiteSpace(ts.GiayToPhapLy) ? "Chưa ghi giấy tờ" : ts.GiayToPhapLy)</div>
+                                    </td>
+                                    <td class="text-end">@Vnd(ts.GiaTriDinhGia ?? ts.GiaTriKhaiBao)</td>
+                                    <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
+                                    <td class="text-center"><span class="status-chip status-chip-muted">@ts.TrangThai</span></td>
+                                    <td class="text-center"><span class="status-chip status-chip-success">@ts.TrangThaiSoHuu</span></td>
+                                </tr>
+                            }
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card section-card p-3">
+                <div class="section-card-title mb-3">
+                    <i class="bi bi-shield-check"></i>
+                    <span>Kiểm tra trước giải ngân</span>
+                </div>
+
+                <div class="d-flex flex-column gap-2">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-secondary">Ho so da duyet</span>
+                        <span class="status-chip status-chip-success">Có</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-secondary">Tài sản bảo đảm</span>
+                        <span class="status-chip @(Model.Loan.DaDuDieuKienTaiSan ? "status-chip-success" : "status-chip-warning")">
+                            @(Model.Loan.DaDuDieuKienTaiSan ? "Đạt" : "Chưa đạt")
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-secondary">Khoan vay dang hoat dong</span>
+                        <span class="status-chip @(Model.HasActiveLoan ? "status-chip-warning" : "status-chip-success")">
+                            @(Model.HasActiveLoan ? "Có" : "Không")
+                        </span>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.ActiveLoanMessage))
+                {
+                    <div class="alert alert-warning mt-3 mb-0">@Model.ActiveLoanMessage</div>
+                }
+
+                <hr />
+
+                <form asp-action="Disburse" asp-route-id="@Model.Loan.MaDon" method="post" onsubmit="return confirm('Xác nhận giải ngân hồ sơ này và tạo khoản vay?');">
+                    @Html.AntiForgeryToken()
+                    <button class="btn btn-success w-100" type="submit" @(Model.CanDisburse ? null : "disabled")>
+                        Xác nhận giải ngân
+                    </button>
+                </form>
+
+                @if (!Model.CanDisburse)
+                {
+                    <div class="text-secondary small mt-2">Cần xử lý các điều kiện chưa đạt trước khi giải ngân.</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

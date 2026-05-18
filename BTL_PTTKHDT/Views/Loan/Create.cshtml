@@ -1,5 +1,8 @@
 @model BTL_PTTKHDT.Models.LoanCreateViewModel
 @{
+    var initialAmount = Model.SoTienYeuCau > 0
+        ? Model.SoTienYeuCau.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))
+        : string.Empty;
     ViewData["Title"] = "Tạo đơn vay mới";
 }
 
@@ -39,7 +42,11 @@
 
             <div class="mb-3">
                 <label class="form-label">Số tiền yêu cầu</label>
-                <input asp-for="SoTienYeuCau" class="form-control" inputmode="numeric" />
+                <input asp-for="SoTienYeuCau" type="hidden" id="loan-amount-value" />
+                <div class="input-group">
+                    <input id="loan-amount-display" class="form-control" value="@initialAmount" inputmode="numeric" autocomplete="off" placeholder="1.000.000" />
+                    <span class="input-group-text">VNĐ</span>
+                </div>
                 <span asp-validation-for="SoTienYeuCau" class="text-danger"></span>
             </div>
 
@@ -90,6 +97,25 @@
             const name = document.getElementById('customer-name');
             const type = document.getElementById('customer-type');
             const doc = document.getElementById('customer-doc');
+            const amountDisplay = document.getElementById('loan-amount-display');
+            const amountValue = document.getElementById('loan-amount-value');
+            const form = amountDisplay?.closest('form');
+
+            function onlyDigits(value) {
+                return (value || '').replace(/[^\d]/g, '');
+            }
+
+            function formatVnd(value) {
+                const digits = onlyDigits(value);
+                return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            }
+
+            function syncAmount() {
+                if (!amountDisplay || !amountValue) return;
+                const digits = onlyDigits(amountDisplay.value);
+                amountValue.value = digits;
+                amountDisplay.value = formatVnd(digits);
+            }
 
             function showError(message) {
                 err.textContent = message || '';
@@ -130,6 +156,9 @@
 
             btn.addEventListener('click', () => lookup());
             clearBtn.addEventListener('click', () => clearCustomer());
+            amountDisplay?.addEventListener('input', () => syncAmount());
+            form?.addEventListener('submit', () => syncAmount());
+            syncAmount();
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();

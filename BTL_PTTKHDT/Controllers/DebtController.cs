@@ -1,5 +1,6 @@
-using System.Globalization;
+﻿using System.Globalization;
 using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +9,12 @@ namespace BTL_PTTKHDT.Controllers;
 public sealed class DebtController : Controller
 {
     private readonly QltdnhContext _db;
+    private readonly ICreditScoreService _creditScoreService;
 
-    public DebtController(QltdnhContext db)
+    public DebtController(QltdnhContext db, ICreditScoreService creditScoreService)
     {
         _db = db;
+        _creditScoreService = creditScoreService;
     }
 
     private const int PageSize = 10;
@@ -19,6 +22,7 @@ public sealed class DebtController : Controller
     public async Task<IActionResult> Index(string? q, int page = 1, CancellationToken ct = default)
     {
         if (page < 1) page = 1;
+        await RefreshOverdueStatusAsync(ct);
 
         IQueryable<KhoanVay> baseQuery = _db.KhoanVays
             .AsNoTracking()
@@ -51,12 +55,13 @@ public sealed class DebtController : Controller
                 DuNoGoc = x.DuNoGoc,
                 KyHan = x.KyHan,
                 LaiSuat = x.LaiSuat,
+                NhomNo = x.NhomNo,
                 NgayGiaiNgan = x.NgayGiaiNgan,
                 TrangThai = x.TrangThai
             })
             .ToListAsync(ct);
 
-        ViewData["Title"] = "Giải ngân & Quản lý nợ";
+        ViewData["Title"] = "Quan ly no";
         ViewData["Query"] = q;
         ViewData["Page"] = page;
         ViewData["PageSize"] = PageSize;
@@ -68,6 +73,7 @@ public sealed class DebtController : Controller
     public async Task<IActionResult> Details(string id, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
+        await RefreshOverdueStatusAsync(id, ct);
 
         var kv = await _db.KhoanVays
             .AsNoTracking()
@@ -91,7 +97,11 @@ public sealed class DebtController : Controller
                 SoTienGoc = x.SoTienGoc,
                 SoTienLai = x.SoTienLai,
                 SoTienDaThanhToan = x.SoTienDaThanhToan,
-                TrangThai = x.TrangThai
+                TrangThai = x.TrangThai,
+                DaysOverdue = CalculateDaysOverdue(x, DateOnly.FromDateTime(DateTime.Now)),
+                WasPaidLate = x.TrangThai == "Đã trả"
+                    && x.NgayThanhToanThucTe.HasValue
+                    && x.NgayThanhToanThucTe.Value > x.NgayPhaiTra
             })
             .ToList();
 
@@ -130,6 +140,7 @@ public sealed class DebtController : Controller
                 DuNoGoc = kv.DuNoGoc,
                 KyHan = kv.KyHan,
                 LaiSuat = kv.LaiSuat,
+                NhomNo = kv.NhomNo,
                 NgayGiaiNgan = kv.NgayGiaiNgan,
                 TrangThai = kv.TrangThai
             },
@@ -159,13 +170,13 @@ public sealed class DebtController : Controller
         var schedule = kv.LichTraNos.FirstOrDefault(x => x.MaLichTraNo == maLich);
         if (schedule == null)
         {
-            TempData["DebtError"] = "Không tìm thấy kỳ trả nợ để thanh toán.";
+            TempData["DebtError"] = "Khong tìm thấy kỳ trả nợ để thanh toán.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         if (!TryParseFlexibleDecimal(Request.Form["SoTienThanhToan"].ToString(), out var amount) || amount <= 0)
         {
-            TempData["DebtError"] = "Số tiền thanh toán phải là số và lớn hơn 0.";
+            TempData["DebtError"] = "So tien thanh toán phải là số và lớn hơn 0.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -180,11 +191,11 @@ public sealed class DebtController : Controller
 
         if (amount > remaining)
         {
-            TempData["DebtError"] = $"Số tiền trả không được lớn hơn số tiền còn phải trả của kỳ này ({remaining:N0} đ).";
+            TempData["DebtError"] = $"So tien trả không được lớn hơn số tiền còn phải trả của kỳ này ({remaining:N0} đ).";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var paymentMethod = string.IsNullOrWhiteSpace(model.HinhThuc) ? "Tien mat" : model.HinhThuc.Trim();
+        var paymentMethod = string.IsNullOrWhiteSpace(model.HinhThuc) ? "Tiền mặt" : model.HinhThuc.Trim();
         if (!IsValidPaymentMethod(paymentMethod))
         {
             TempData["DebtError"] = "Hình thức thanh toán không hợp lệ.";
@@ -206,18 +217,18 @@ public sealed class DebtController : Controller
         schedule.SoTienDaThanhToan += amount;
         if (schedule.SoTienDaThanhToan >= due)
         {
-            schedule.TrangThai = "Da tra";
+            schedule.TrangThai = "Đã trả";
             schedule.NgayThanhToanThucTe = DateOnly.FromDateTime(now);
         }
         else
         {
-            schedule.TrangThai = "Tra mot phan";
+            schedule.TrangThai = "Trả một phần";
         }
 
         kv.DuNoGoc = Math.Max(0m, kv.DuNoGoc - principalPay);
-        if (kv.DuNoGoc <= 0 && kv.LichTraNos.All(x => x.TrangThai == "Da tra"))
+        if (kv.DuNoGoc <= 0 && kv.LichTraNos.All(x => x.TrangThai == "Đã trả"))
         {
-            kv.TrangThai = "Da tra het";
+            kv.TrangThai = "Đã trả hết";
         }
 
         var payment = new ThanhToan
@@ -236,8 +247,207 @@ public sealed class DebtController : Controller
         };
 
         _db.ThanhToans.Add(payment);
+        RefreshLoanOverdueStatus(kv, DateOnly.FromDateTime(now));
         await _db.SaveChangesAsync(ct);
+        await _creditScoreService.RecalculateAsync(kv.MaKh, "Thanh toán", ct);
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Payoff(string id, string? hinhThuc, string? ghiChu, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+        var kv = await _db.KhoanVays
+            .Include(x => x.LichTraNos)
+            .Include(x => x.TaiSanTheChaps)
+            .ThenInclude(x => x.MaTaiSanKhNavigation)
+            .FirstOrDefaultAsync(x => x.MaVay == id, ct);
+
+        if (kv == null) return NotFound();
+
+        if (kv.DuNoGoc <= 0 && kv.LichTraNos.All(x => x.TrangThai == "Đã trả"))
+        {
+            TempData["DebtError"] = "Khoản vay đã tất toán.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var paymentMethod = string.IsNullOrWhiteSpace(hinhThuc) ? "Tiền mặt" : hinhThuc.Trim();
+        if (!IsValidPaymentMethod(paymentMethod))
+        {
+            TempData["DebtError"] = "Hình thức thanh toán không hợp lệ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var schedules = kv.LichTraNos
+            .Where(x => x.TrangThai != "Đã trả")
+            .OrderBy(x => x.KyThu)
+            .ToList();
+
+        var principalPay = 0m;
+        var interestPay = 0m;
+        var now = DateTime.Now;
+
+        foreach (var schedule in schedules)
+        {
+            var interestPaidSoFar = Math.Min(schedule.SoTienLai, schedule.SoTienDaThanhToan);
+            var principalPaidSoFar = Math.Max(0m, schedule.SoTienDaThanhToan - schedule.SoTienLai);
+
+            var interestRemaining = Math.Max(0m, schedule.SoTienLai - interestPaidSoFar);
+            var principalRemaining = Math.Max(0m, schedule.SoTienGoc - principalPaidSoFar);
+            var remaining = interestRemaining + principalRemaining;
+
+            if (remaining <= 0)
+            {
+                schedule.TrangThai = "Đã trả";
+                schedule.NgayThanhToanThucTe ??= DateOnly.FromDateTime(now);
+                continue;
+            }
+
+            schedule.SoTienDaThanhToan += remaining;
+            schedule.TrangThai = "Đã trả";
+            schedule.NgayThanhToanThucTe = DateOnly.FromDateTime(now);
+
+            interestPay += interestRemaining;
+            principalPay += principalRemaining;
+        }
+
+        var totalPay = principalPay + interestPay;
+        if (totalPay <= 0)
+        {
+            TempData["DebtError"] = "Khong còn số tiền cần thanh toán.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        kv.DuNoGoc = 0m;
+        kv.TrangThai = "Đã trả hết";
+
+        foreach (var collateral in kv.TaiSanTheChaps.Where(x => x.TrangThai == "Đang thế chấp" || x.TrangThai == "Xử lý"))
+        {
+            collateral.TrangThai = "Đã giải chấp";
+            collateral.NgayGiaiChap = DateOnly.FromDateTime(now);
+        }
+
+        var actor = await GetDefaultEmployeeIdAsync(ct);
+        _db.ThanhToans.Add(new ThanhToan
+        {
+            MaThanhToan = await GetNextPaymentCodeAsync(ct),
+            MaVay = kv.MaVay,
+            MaLichTraNo = null,
+            MaNv = actor,
+            SoTienThanhToan = totalPay,
+            SoTienGocTra = principalPay,
+            SoTienLaiTra = interestPay,
+            SoTienPhatTra = 0m,
+            NgayThanhToan = now,
+            HinhThuc = paymentMethod,
+            GhiChu = string.IsNullOrWhiteSpace(ghiChu) ? "Tat toan khoan vay" : ghiChu.Trim()
+        });
+
+        RefreshLoanOverdueStatus(kv, DateOnly.FromDateTime(now));
+        await _db.SaveChangesAsync(ct);
+        await _creditScoreService.RecalculateAsync(kv.MaKh, "Tat toan", ct);
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private async Task RefreshOverdueStatusAsync(CancellationToken ct)
+    {
+        var loans = await _db.KhoanVays
+            .Include(x => x.LichTraNos)
+            .Where(x => x.TrangThai != "Đã trả hết" && x.TrangThai != "Xóa nợ")
+            .ToListAsync(ct);
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        foreach (var loan in loans)
+        {
+            RefreshLoanOverdueStatus(loan, today);
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task RefreshOverdueStatusAsync(string maVay, CancellationToken ct)
+    {
+        var loan = await _db.KhoanVays
+            .Include(x => x.LichTraNos)
+            .FirstOrDefaultAsync(x => x.MaVay == maVay, ct);
+
+        if (loan == null) return;
+
+        RefreshLoanOverdueStatus(loan, DateOnly.FromDateTime(DateTime.Now));
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private static void RefreshLoanOverdueStatus(KhoanVay loan, DateOnly today)
+    {
+        var maxDaysOverdue = 0;
+
+        foreach (var schedule in loan.LichTraNos)
+        {
+            var due = schedule.SoTienGoc + schedule.SoTienLai;
+            if (schedule.SoTienDaThanhToan >= due)
+            {
+                schedule.TrangThai = "Đã trả";
+                continue;
+            }
+
+            var daysOverdue = CalculateDaysOverdue(schedule, today);
+            if (daysOverdue > 0)
+            {
+                schedule.TrangThai = "Trễ hạn";
+                maxDaysOverdue = Math.Max(maxDaysOverdue, daysOverdue);
+            }
+            else if (schedule.SoTienDaThanhToan > 0)
+            {
+                schedule.TrangThai = "Trả một phần";
+            }
+            else
+            {
+                schedule.TrangThai = "Chưa trả";
+            }
+        }
+
+        var newGroup = MapDebtGroup(maxDaysOverdue);
+        if (loan.NhomNo != newGroup)
+        {
+            loan.NhomNo = newGroup;
+            loan.NgayCapNhatNhom = today;
+        }
+
+        if (loan.DuNoGoc <= 0 && loan.LichTraNos.All(x => x.TrangThai == "Đã trả"))
+        {
+            loan.TrangThai = "Đã trả hết";
+            loan.NhomNo = 1;
+            loan.NgayCapNhatNhom = today;
+        }
+        else if (maxDaysOverdue > 0)
+        {
+            loan.TrangThai = "Quá hạn";
+        }
+        else if (loan.TrangThai == "Quá hạn")
+        {
+            loan.TrangThai = "Đang vay";
+        }
+    }
+
+    private static int CalculateDaysOverdue(LichTraNo schedule, DateOnly today)
+    {
+        var due = schedule.SoTienGoc + schedule.SoTienLai;
+        if (schedule.SoTienDaThanhToan >= due) return 0;
+        return schedule.NgayPhaiTra < today ? today.DayNumber - schedule.NgayPhaiTra.DayNumber : 0;
+    }
+
+    private static byte MapDebtGroup(int maxDaysOverdue)
+    {
+        return maxDaysOverdue switch
+        {
+            <= 9 => 1,
+            <= 90 => 2,
+            <= 180 => 3,
+            <= 360 => 4,
+            _ => 5
+        };
     }
 
     private async Task<string?> GetDefaultEmployeeIdAsync(CancellationToken ct)
@@ -302,6 +512,6 @@ public sealed class DebtController : Controller
     private static bool IsValidPaymentMethod(string method)
     {
         var m = (method ?? string.Empty).Trim();
-        return m is "Tien mat" or "Chuyen khoan" or "Thu no tu dong";
+        return m is "Tiền mặt" or "Chuyển khoản" or "Thu nợ tự động";
     }
 }
