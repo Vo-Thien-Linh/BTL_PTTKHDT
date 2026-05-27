@@ -1,0 +1,350 @@
+@model BTL_PTTKHDT.Models.KhachHang
+
+@{
+    ViewData["Title"] = "Chi tiết khách hàng";
+    var account = Model.TaiKhoanKhachHang;
+    var credit = ViewData["CreditHistory"] as BTL_PTTKHDT.Models.LichSuTinDung;
+    var creditLimit = ViewData["CreditLimit"] as BTL_PTTKHDT.Models.HanMucTinDung;
+    var assets = ViewData["CustomerAssets"] as IEnumerable<BTL_PTTKHDT.Models.TaiSanKhachHang> ?? Enumerable.Empty<BTL_PTTKHDT.Models.TaiSanKhachHang>();
+    var isBusiness = (Model.LoaiKhachHang ?? string.Empty).Contains("doanh", StringComparison.OrdinalIgnoreCase);
+    var creditLimitInput = TempData["CreditLimitInput"] as string;
+}
+
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="mb-1">Chi tiết khách hàng</h2>
+            <div class="text-secondary">@Model.MaKhText</div>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="Index" class="btn btn-light">
+                <i class="bi bi-arrow-left me-1"></i>Quay lại
+            </a>
+            <a asp-action="Edit" asp-route-id="@Model.MaKh" class="btn btn-primary">
+                <i class="bi bi-pencil-square me-1"></i>Sửa
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["CreditLimitError"] != null)
+    {
+        <div class="alert alert-danger mb-3">@TempData["CreditLimitError"]</div>
+    }
+    @if (TempData["CreditLimitSuccess"] != null)
+    {
+        <div class="alert alert-success mb-3">@TempData["CreditLimitSuccess"]</div>
+    }
+
+    <div class="row g-4">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    @if (!string.IsNullOrWhiteSpace(Model.AnhDaiDienUrl))
+                    {
+                        <img src="@Model.AnhDaiDienUrl" alt="@Model.HoTen" class="detail-avatar mb-3" />
+                    }
+                    else
+                    {
+                        <div class="detail-avatar detail-avatar-placeholder mb-3">
+                            <i class="bi @(isBusiness ? "bi-buildings" : "bi-person")"></i>
+                        </div>
+                    }
+                    <h4 class="mb-1">@Model.HoTen</h4>
+                    <div class="text-secondary mb-3">@(isBusiness ? "Doanh nghiệp" : "Cá nhân")</div>
+                    @if (account?.BiKhoa == true)
+                    {
+                        <span class="badge text-bg-danger">Tài khoản đang khóa</span>
+                    }
+                    else if (Model.IsActive)
+                    {
+                        <span class="badge text-bg-success">Đang hoạt động</span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-secondary">Tạm ngưng</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">Thông tin chung</div>
+                <div class="card-body">
+                    <div class="detail-grid">
+                        <div>
+                            <span>Mã khách hàng</span>
+                            <strong>@Model.MaKhText</strong>
+                        </div>
+                        <div>
+                            <span>Số điện thoại</span>
+                            <strong>@Model.SoDienThoai</strong>
+                        </div>
+                        <div>
+                            <span>Email</span>
+                            <strong>@(Model.Email ?? "Chưa có")</strong>
+                        </div>
+                        <div>
+                            <span>CMND/CCCD hoặc mã đăng ký</span>
+                            <strong>@Model.CmndCccd</strong>
+                        </div>
+                        <div>
+                            <span>Ngày sinh/ngày đại diện</span>
+                            <strong>@(Model.NgaySinh == default ? "Chưa có" : Model.NgaySinh.ToString("dd/MM/yyyy"))</strong>
+                        </div>
+                        <div>
+                            <span>Ngày tạo</span>
+                            <strong>@Model.NgayTao.ToString("dd/MM/yyyy HH:mm")</strong>
+                        </div>
+                        <div class="detail-grid-wide">
+                            <span>Địa chỉ</span>
+                            <strong>@(Model.DiaChi ?? "Chưa có")</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">Thông tin @(isBusiness ? "doanh nghiệp" : "cá nhân")</div>
+                <div class="card-body">
+                    @if (isBusiness)
+                    {
+                        <div class="detail-grid">
+                            <div>
+                                <span>Mã số thuế</span>
+                                <strong>@(Model.MaSoThue ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Ngày thành lập</span>
+                                <strong>@(Model.NgayThanhLap?.ToString("dd/MM/yyyy") ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Người đại diện</span>
+                                <strong>@(Model.TenNguoiDaiDien ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Chức vụ đại diện</span>
+                                <strong>@(Model.ChucVuNguoiDaiDien ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Doanh thu bình quân tháng</span>
+                                <strong>@(Model.DoanhThuBinhQuanThang?.ToString("N0") ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Lợi nhuận bình quân tháng</span>
+                                <strong>@(Model.LoiNhuanBinhQuanThang?.ToString("N0") ?? "Chưa có")</strong>
+                            </div>
+                            <div class="detail-grid-wide">
+                                <span>Lĩnh vực kinh doanh</span>
+                                <strong>@(Model.LinhVucKinhDoanh ?? "Chưa có")</strong>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="detail-grid">
+                            <div>
+                                <span>Nghề nghiệp</span>
+                                <strong>@(Model.NgheNghiep ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Nơi làm việc</span>
+                                <strong>@(Model.NoiLamViec ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Chức vụ</span>
+                                <strong>@(Model.ChucVu ?? "Chưa có")</strong>
+                            </div>
+                            <div>
+                                <span>Thu nhập hàng tháng</span>
+                                <strong>@(Model.ThuNhapHangThang?.ToString("N0") ?? "Chưa có")</strong>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-12 col-xl-6">
+                    <div class="card h-100">
+                        <div class="card-header fw-semibold">Tín dụng</div>
+                        <div class="card-body">
+                            <div class="detail-grid detail-grid-one">
+                                <div>
+                                    <span>Điểm tín dụng</span>
+                                    <strong>@(credit?.DiemTinDung.ToString() ?? "Chưa có")</strong>
+                                </div>
+                                <div>
+                                    <span>Xếp hạng rủi ro</span>
+                                    <strong>@(credit?.XepHangRuiRo ?? "Chưa có")</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-xl-6">
+                    <div class="card h-100">
+                        <div class="card-header fw-semibold">Tài khoản cổng khách hàng</div>
+                        <div class="card-body">
+                            @if (account == null)
+                            {
+                                <div class="text-secondary">Chưa có tài khoản cổng khách hàng.</div>
+                            }
+                            else
+                            {
+                                <div class="detail-grid detail-grid-one">
+                                    <div>
+                                        <span>Tên đăng nhập</span>
+                                        <strong>@account.TenDangNhap</strong>
+                                    </div>
+                                    <div>
+                                        <span>Đăng nhập cuối</span>
+                                        <strong>@(account.LanDangNhapCuoi?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa có")</strong>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header fw-semibold">Hạn mức tín dụng</div>
+                <div class="card-body">
+                    <div class="detail-grid mb-3">
+                        <div>
+                            <span>Hạn mức tối đa</span>
+                            <strong>@(creditLimit == null ? "Chưa cấp" : creditLimit.HanMucToiDa.ToString("N0") + " VNĐ")</strong>
+                        </div>
+                        <div>
+                            <span>Đã sử dụng</span>
+                            <strong>@(creditLimit == null ? "-" : creditLimit.HanMucDaSuDung.ToString("N0") + " VNĐ")</strong>
+                        </div>
+                        <div>
+                            <span>Còn lại</span>
+                            <strong>@(creditLimit?.HanMucConLai == null ? "-" : creditLimit.HanMucConLai.Value.ToString("N0") + " VNĐ")</strong>
+                        </div>
+                        <div>
+                            <span>Ngày cập nhật</span>
+                            <strong>@(creditLimit == null ? "-" : creditLimit.NgayCapNhat.ToString("dd/MM/yyyy"))</strong>
+                        </div>
+                    </div>
+                    <form asp-action="UpdateCreditLimit" asp-route-id="@Model.MaKh" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <label class="form-label small text-secondary" for="customerCreditLimit">Cấp/Cập nhật hạn mức tối đa</label>
+                        <div class="input-group">
+                            <input id="customerCreditLimit"
+                                   name="hanMucToiDa"
+                                   class="form-control"
+                                   inputmode="numeric"
+                                   value="@(creditLimitInput ?? creditLimit?.HanMucToiDa.ToString("N0"))"
+                                   placeholder="Ví dụ: 100.000.000" />
+                            <button class="btn btn-primary" type="submit">
+                                <i class="bi bi-check2 me-1"></i>Lưu
+                            </button>
+                        </div>
+                        <div class="form-text">Có thể để khách hàng chưa có hạn mức riêng; hồ sơ vay vẫn xét theo tài sản bảo đảm.</div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header fw-semibold">Tài sản gần nhất</div>
+                <div class="card-body">
+                    @if (!assets.Any())
+                    {
+                        <div class="text-secondary">Chưa có tài sản được khai báo.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Loại tài sản</th>
+                                        <th>Giá trị</th>
+                                        <th>Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var asset in assets)
+                                    {
+                                        <tr>
+                                            <td>@asset.LoaiTaiSan</td>
+                                            <td>@((asset.GiaTriDinhGia ?? asset.GiaTriKhaiBao).ToString("N0"))</td>
+                                            <td>@asset.TrangThaiSoHuu</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .detail-avatar {
+        width: 132px;
+        height: 132px;
+        border-radius: 999px;
+        object-fit: cover;
+        object-position: center 25%;
+        border: 3px solid #fff;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
+    }
+
+    .detail-avatar-placeholder {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #e0f2fe, #ccfbf1);
+        color: #2563eb;
+        font-size: 3rem;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .detail-grid-one {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-grid div {
+        min-height: 72px;
+        padding: .85rem 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .detail-grid span {
+        display: block;
+        color: #64748b;
+        font-size: .85rem;
+        margin-bottom: .35rem;
+    }
+
+    .detail-grid strong {
+        color: #14213d;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .detail-grid-wide {
+        grid-column: 1 / -1;
+    }
+
+    @@media (max-width: 575.98px) {
+        .detail-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

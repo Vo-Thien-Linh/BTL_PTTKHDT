@@ -1,11 +1,15 @@
 ﻿using System.Globalization;
+using System.Data;
 using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Security;
 using BTL_PTTKHDT.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace BTL_PTTKHDT.Controllers;
 
+[PermissionAuthorize(AppPermissions.ViewDebts)]
 public sealed class DebtController : Controller
 {
     private readonly QltdnhContext _db;
@@ -97,6 +101,7 @@ public sealed class DebtController : Controller
                 SoTienGoc = x.SoTienGoc,
                 SoTienLai = x.SoTienLai,
                 SoTienDaThanhToan = x.SoTienDaThanhToan,
+                GhiChu = x.GhiChu,
                 TrangThai = x.TrangThai,
                 DaysOverdue = CalculateDaysOverdue(x, DateOnly.FromDateTime(DateTime.Now)),
                 WasPaidLate = x.TrangThai == "Đã trả"
@@ -147,15 +152,101 @@ public sealed class DebtController : Controller
             LichTraNo = schedule,
             TaiSanTheChap = collaterals,
             HopDong = contract,
-            ThanhToanMoi = new DebtPaymentCreateViewModel()
+            ThanhToanMoi = new DebtPaymentCreateViewModel(),
+            XuLyThuHoiNo = await LoadCollectionActionsAsync(kv.MaVay, ct),
+            XuLyMoi = new DebtCollectionCreateViewModel(),
+            LichSuCoCauNo = await LoadRestructureHistoryAsync(kv.MaVay, ct),
+            CoCauMoi = new DebtRestructureCreateViewModel
+            {
+                KyHanMoi = kv.KyHan + 6,
+                LaiSuatMoi = kv.LaiSuat
+            }
         };
 
         ViewData["Title"] = $"Khoản vay: {kv.MaVay}";
         return View(vm);
     }
 
+    private async Task<IReadOnlyList<DebtCollectionActionViewModel>> LoadCollectionActionsAsync(string maVay, CancellationToken ct)
+    {
+        if (!await TableExistsAsync("XuLyThuHoiNo", ct))
+        {
+            ViewData["DebtFeatureWarning"] = "Chưa có bảng XuLyThuHoiNo/CoCauNo trong database. Hãy chạy migration trước khi dùng xử lý thu hồi nợ/cơ cấu nợ.";
+            return [];
+        }
+
+        try
+        {
+            return await _db.XuLyThuHoiNos
+                .AsNoTracking()
+                .Include(x => x.MaNvNavigation)
+                .Where(x => x.MaVay == maVay)
+                .OrderByDescending(x => x.NgayXuLy)
+                .Select(x => new DebtCollectionActionViewModel
+                {
+                    MaXuLy = x.MaXuLy,
+                    NgayXuLy = x.NgayXuLy,
+                    MaNv = x.MaNv,
+                    TenNhanVien = x.MaNvNavigation.HoTen,
+                    HinhThucLienHe = x.HinhThucLienHe,
+                    KetQua = x.KetQua,
+                    NgayHenTra = x.NgayHenTra,
+                    SoTienHenTra = x.SoTienHenTra,
+                    DeXuatXuLy = x.DeXuatXuLy,
+                    GhiChu = x.GhiChu
+                })
+                .ToListAsync(ct);
+        }
+        catch
+        {
+            ViewData["DebtFeatureWarning"] = "Bảng XuLyThuHoiNo chưa khớp cấu trúc code. Hãy chạy lại migration.";
+            return [];
+        }
+    }
+
+    private async Task<IReadOnlyList<DebtRestructureHistoryViewModel>> LoadRestructureHistoryAsync(string maVay, CancellationToken ct)
+    {
+        if (!await TableExistsAsync("CoCauNo", ct))
+        {
+            ViewData["DebtFeatureWarning"] = "Chưa có bảng XuLyThuHoiNo/CoCauNo trong database. Hãy chạy migration trước khi dùng xử lý thu hồi nợ/cơ cấu nợ.";
+            return [];
+        }
+
+        try
+        {
+            return await _db.CoCauNos
+                .AsNoTracking()
+                .Include(x => x.MaNvNavigation)
+                .Where(x => x.MaVay == maVay)
+                .OrderByDescending(x => x.NgayCoCau)
+                .Select(x => new DebtRestructureHistoryViewModel
+                {
+                    MaCoCau = x.MaCoCau,
+                    NgayCoCau = x.NgayCoCau,
+                    MaNv = x.MaNv,
+                    TenNhanVien = x.MaNvNavigation.HoTen,
+                    KyHanCu = x.KyHanCu,
+                    KyHanMoi = x.KyHanMoi,
+                    LaiSuatCu = x.LaiSuatCu,
+                    LaiSuatMoi = x.LaiSuatMoi,
+                    NgayDaoHanCu = x.NgayDaoHanCu,
+                    NgayDaoHanMoi = x.NgayDaoHanMoi,
+                    DuNoGocCoCau = x.DuNoGocCoCau,
+                    LyDo = x.LyDo,
+                    GhiChu = x.GhiChu
+                })
+                .ToListAsync(ct);
+        }
+        catch
+        {
+            ViewData["DebtFeatureWarning"] = "Bảng CoCauNo chưa khớp cấu trúc code. Hãy chạy lại migration.";
+            return [];
+        }
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [PermissionAuthorize(AppPermissions.CollectDebts)]
     public async Task<IActionResult> Pay(string id, DebtPaymentCreateViewModel model, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
@@ -171,6 +262,25 @@ public sealed class DebtController : Controller
         if (schedule == null)
         {
             TempData["DebtError"] = "Khong tìm thấy kỳ trả nợ để thanh toán.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var earlierUnpaid = kv.LichTraNos
+            .Select(x => new
+            {
+                x.KyThu,
+                x.MaLichTraNo,
+                Due = x.SoTienGoc + x.SoTienLai,
+                x.SoTienDaThanhToan
+            })
+            .Where(x => x.KyThu < schedule.KyThu)
+            .Where(x => x.Due > 0m && x.SoTienDaThanhToan < x.Due)
+            .OrderBy(x => x.KyThu)
+            .FirstOrDefault();
+
+        if (earlierUnpaid != null)
+        {
+            TempData["DebtError"] = $"Vui lòng thanh toán theo thứ tự kỳ. Kỳ {earlierUnpaid.KyThu} chưa thanh toán đủ nên không thể thanh toán kỳ {schedule.KyThu}.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -226,6 +336,7 @@ public sealed class DebtController : Controller
         }
 
         kv.DuNoGoc = Math.Max(0m, kv.DuNoGoc - principalPay);
+        await ReduceUsedCreditLimitAsync(kv.MaKh, principalPay, DateOnly.FromDateTime(now), ct);
         if (kv.DuNoGoc <= 0 && kv.LichTraNos.All(x => x.TrangThai == "Đã trả"))
         {
             kv.TrangThai = "Đã trả hết";
@@ -255,6 +366,7 @@ public sealed class DebtController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [PermissionAuthorize(AppPermissions.CollectDebts)]
     public async Task<IActionResult> Payoff(string id, string? hinhThuc, string? ghiChu, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
@@ -322,6 +434,7 @@ public sealed class DebtController : Controller
 
         kv.DuNoGoc = 0m;
         kv.TrangThai = "Đã trả hết";
+        await ReduceUsedCreditLimitAsync(kv.MaKh, principalPay, DateOnly.FromDateTime(now), ct);
 
         foreach (var collateral in kv.TaiSanTheChaps.Where(x => x.TrangThai == "Đang thế chấp" || x.TrangThai == "Xử lý"))
         {
@@ -349,6 +462,302 @@ public sealed class DebtController : Controller
         await _db.SaveChangesAsync(ct);
         await _creditScoreService.RecalculateAsync(kv.MaKh, "Tat toan", ct);
         return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [PermissionAuthorize(AppPermissions.CollectDebts)]
+    public async Task<IActionResult> RecordCollectionAction(string id, DebtCollectionCreateViewModel model, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+        if (!await TableExistsAsync("XuLyThuHoiNo", ct))
+        {
+            TempData["DebtError"] = "Chưa có bảng XuLyThuHoiNo. Hãy chạy DebtCollectionActionMigration.sql trước khi ghi nhận xử lý thu hồi nợ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var loan = await _db.KhoanVays
+            .Include(x => x.TaiSanTheChaps)
+            .FirstOrDefaultAsync(x => x.MaVay == id, ct);
+        if (loan == null) return NotFound();
+
+        ModelState.Remove(nameof(DebtCollectionCreateViewModel.SoTienHenTra));
+        if (!ModelState.IsValid)
+        {
+            TempData["DebtError"] = "Thông tin xử lý thu hồi nợ không hợp lệ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var contactMethod = (model.HinhThucLienHe ?? string.Empty).Trim();
+        var result = (model.KetQua ?? string.Empty).Trim();
+        var proposal = string.IsNullOrWhiteSpace(model.DeXuatXuLy) ? null : model.DeXuatXuLy.Trim();
+        if (!IsValidCollectionContactMethod(contactMethod) || !IsValidCollectionResult(result) || !IsValidCollectionProposal(proposal))
+        {
+            TempData["DebtError"] = "Hình thức, kết quả hoặc đề xuất xử lý không hợp lệ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (model.NgayHenTra.HasValue && model.NgayHenTra.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            TempData["DebtError"] = "Ngày hẹn trả không được nhỏ hơn ngày hiện tại.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        decimal? promisedAmount = null;
+        var promisedAmountRaw = Request.Form["SoTienHenTra"].ToString();
+        if (!string.IsNullOrWhiteSpace(promisedAmountRaw))
+        {
+            if (!TryParseFlexibleDecimal(promisedAmountRaw, out var parsedPromisedAmount) || parsedPromisedAmount < 0)
+            {
+                TempData["DebtError"] = "Số tiền hẹn trả không hợp lệ.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            promisedAmount = parsedPromisedAmount;
+        }
+
+        var actor = await GetDefaultEmployeeIdAsync(ct);
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            TempData["DebtError"] = "Chưa có nhân viên để ghi nhận xử lý thu hồi nợ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        _db.XuLyThuHoiNos.Add(new XuLyThuHoiNo
+        {
+            MaXuLy = await GetNextCollectionActionCodeAsync(ct),
+            MaVay = loan.MaVay,
+            MaNv = actor,
+            NgayXuLy = DateTime.Now,
+            HinhThucLienHe = contactMethod,
+            KetQua = result,
+            NgayHenTra = model.NgayHenTra,
+            SoTienHenTra = promisedAmount,
+            DeXuatXuLy = proposal,
+            GhiChu = string.IsNullOrWhiteSpace(model.GhiChu) ? null : model.GhiChu.Trim()
+        });
+
+        if (proposal == "Xử lý tài sản bảo đảm")
+        {
+            foreach (var collateral in loan.TaiSanTheChaps.Where(x => x.TrangThai == "Đang thế chấp"))
+            {
+                collateral.TrangThai = "Xử lý";
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+        TempData["DebtSuccess"] = "Đã ghi nhận xử lý thu hồi nợ.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [PermissionAuthorize(AppPermissions.CollectDebts)]
+    public async Task<IActionResult> RestructureLoan(string id, DebtRestructureCreateViewModel model, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+        if (!await TableExistsAsync("CoCauNo", ct))
+        {
+            TempData["DebtError"] = "Chưa có bảng CoCauNo. Hãy chạy DebtRestructureMigration.sql trước khi cơ cấu nợ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var loan = await _db.KhoanVays
+            .Include(x => x.LichTraNos)
+            .ThenInclude(x => x.ThanhToans)
+            .FirstOrDefaultAsync(x => x.MaVay == id, ct);
+        if (loan == null) return NotFound();
+
+        ModelState.Remove(nameof(DebtRestructureCreateViewModel.LaiSuatMoi));
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values
+                .SelectMany(x => x.Errors)
+                .Select(x => x.ErrorMessage)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
+            TempData["DebtError"] = errors.Count == 0
+                ? "Thông tin cơ cấu nợ không hợp lệ. Vui lòng nhập kỳ hạn mới và lý do cơ cấu."
+                : string.Join(" ", errors);
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (loan.DuNoGoc <= 0 || loan.TrangThai == "Đã trả hết" || loan.TrangThai == "Xóa nợ")
+        {
+            TempData["DebtError"] = "Khoản vay đã tất toán hoặc không còn dư nợ để cơ cấu.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var paidThroughPeriod = 0;
+        foreach (var s in loan.LichTraNos.OrderBy(x => x.KyThu))
+        {
+            if (s.KyThu != paidThroughPeriod + 1) break;
+            var due = s.SoTienGoc + s.SoTienLai;
+            if (due <= 0m || s.SoTienDaThanhToan >= due)
+            {
+                paidThroughPeriod = s.KyThu;
+                continue;
+            }
+
+            break;
+        }
+
+        if (model.KyHanMoi <= paidThroughPeriod)
+        {
+            TempData["DebtError"] = $"Kỳ hạn mới phải lớn hơn kỳ đã trả gần nhất ({paidThroughPeriod}).";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var unpaidWithPayment = loan.LichTraNos.Any(x => x.TrangThai != "Đã trả" && x.ThanhToans.Any());
+        if (unpaidWithPayment)
+        {
+            TempData["DebtError"] = "Không thể cơ cấu khi đang có kỳ trả nợ thanh toán một phần. Vui lòng xử lý đủ kỳ đó trước.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var newRate = loan.LaiSuat;
+        var rateRaw = Request.Form["LaiSuatMoi"].ToString();
+        if (!string.IsNullOrWhiteSpace(rateRaw))
+        {
+            if (!TryParseFlexibleDouble(rateRaw, out newRate) || newRate <= 0)
+            {
+                TempData["DebtError"] = "Lãi suất mới không hợp lệ.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+        }
+
+        var actor = await GetDefaultEmployeeIdAsync(ct);
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            TempData["DebtError"] = "Chưa có nhân viên để ghi nhận cơ cấu nợ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var oldTerm = loan.KyHan;
+        var oldRate = loan.LaiSuat;
+        if (model.KyHanMoi <= oldTerm && Math.Abs(newRate - oldRate) < 0.0001)
+        {
+            TempData["DebtError"] = "Cơ cấu nợ phải thay đổi kỳ hạn hoặc lãi suất. Thông thường hãy tăng kỳ hạn mới lớn hơn kỳ hạn hiện tại.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var oldMaturity = loan.NgayDaoHan;
+        var newMaturity = loan.NgayGiaiNgan.AddMonths(model.KyHanMoi);
+        var remainingPeriods = model.KyHanMoi - paidThroughPeriod;
+
+        var oldUnpaidSchedules = loan.LichTraNos
+            .Where(x =>
+            {
+                var due = x.SoTienGoc + x.SoTienLai;
+                return due <= 0m || x.SoTienDaThanhToan < due;
+            })
+            .OrderBy(x => x.KyThu)
+            .ToList();
+
+        var principalFromSchedules = oldUnpaidSchedules
+            .Where(x => x.SoTienGoc + x.SoTienLai > 0m)
+            .Select(x =>
+            {
+                var principalPaidSoFar = Math.Max(0m, x.SoTienDaThanhToan - x.SoTienLai);
+                return Math.Max(0m, x.SoTienGoc - principalPaidSoFar);
+            })
+            .DefaultIfEmpty(0m)
+            .Sum();
+
+        var principalToRestructure = principalFromSchedules > 0m ? principalFromSchedules : loan.DuNoGoc;
+        if (principalToRestructure <= 0m)
+        {
+            TempData["DebtError"] = "Không xác định được dư nợ gốc còn lại để cơ cấu.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        _db.LichTraNos.RemoveRange(oldUnpaidSchedules);
+
+        var nextScheduleNo = await GetNextScheduleCodeSuffixAsync(ct);
+        foreach (var row in BuildRestructuredSchedule(principalToRestructure, newRate, remainingPeriods, loan.NgayGiaiNgan, paidThroughPeriod))
+        {
+            _db.LichTraNos.Add(new LichTraNo
+            {
+                MaLichTraNo = $"LTN{nextScheduleNo:0000}",
+                MaVay = loan.MaVay,
+                KyThu = row.kyThu,
+                NgayPhaiTra = row.ngayPhaiTra,
+                SoTienGoc = row.goc,
+                SoTienLai = row.lai,
+                SoTienDaThanhToan = 0m,
+                TrangThai = "Chưa trả",
+                NgayThanhToanThucTe = null,
+                GhiChu = "Tạo lại sau cơ cấu nợ"
+            });
+            nextScheduleNo++;
+        }
+
+        loan.KyHan = model.KyHanMoi;
+        loan.LaiSuat = newRate;
+        loan.NgayDaoHan = newMaturity;
+        loan.TrangThai = "Cơ cấu lại";
+        loan.GhiChu = string.IsNullOrWhiteSpace(model.GhiChu) ? loan.GhiChu : model.GhiChu.Trim();
+
+        _db.CoCauNos.Add(new CoCauNo
+        {
+            MaCoCau = await GetNextRestructureCodeAsync(ct),
+            MaVay = loan.MaVay,
+            MaNv = actor,
+            NgayCoCau = DateTime.Now,
+            KyHanCu = oldTerm,
+            KyHanMoi = model.KyHanMoi,
+            LaiSuatCu = oldRate,
+            LaiSuatMoi = newRate,
+            NgayDaoHanCu = oldMaturity,
+            NgayDaoHanMoi = newMaturity,
+            DuNoGocCoCau = loan.DuNoGoc,
+            LyDo = model.LyDo.Trim(),
+            GhiChu = string.IsNullOrWhiteSpace(model.GhiChu) ? null : model.GhiChu.Trim()
+        });
+
+        await _db.SaveChangesAsync(ct);
+        await _creditScoreService.RecalculateAsync(loan.MaKh, "Cơ cấu nợ", ct);
+        TempData["DebtSuccess"] = "Đã cơ cấu lại khoản vay và tạo lại lịch trả nợ.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    private async Task ReduceUsedCreditLimitAsync(string maKh, decimal principalPaid, DateOnly updateDate, CancellationToken ct)
+    {
+        if (principalPaid <= 0) return;
+
+        var creditLimit = await _db.HanMucTinDungs.FirstOrDefaultAsync(x => x.MaKh == maKh, ct);
+        if (creditLimit == null) return;
+
+        creditLimit.HanMucDaSuDung = Math.Max(0m, creditLimit.HanMucDaSuDung - principalPaid);
+        creditLimit.NgayCapNhat = updateDate;
+    }
+
+    private async Task<bool> TableExistsAsync(string tableName, CancellationToken ct)
+    {
+        var safeTableName = tableName.Replace("'", "''", StringComparison.Ordinal);
+        var connection = _db.Database.GetDbConnection();
+        var shouldClose = connection.State == ConnectionState.Closed;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(ct);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT CASE WHEN OBJECT_ID(N'dbo.{safeTableName}', N'U') IS NULL THEN 0 ELSE 1 END";
+            var result = await command.ExecuteScalarAsync(ct);
+            return Convert.ToInt32(result, CultureInfo.InvariantCulture) == 1;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     private async Task RefreshOverdueStatusAsync(CancellationToken ct)
@@ -452,6 +861,12 @@ public sealed class DebtController : Controller
 
     private async Task<string?> GetDefaultEmployeeIdAsync(CancellationToken ct)
     {
+        var maNv = User.FindFirst("MaNV")?.Value;
+        if (!string.IsNullOrWhiteSpace(maNv))
+        {
+            return maNv;
+        }
+
         var nv = await _db.NhanViens.AsNoTracking().OrderBy(x => x.MaNv).Select(x => x.MaNv).FirstOrDefaultAsync(ct);
         return string.IsNullOrWhiteSpace(nv) ? null : nv;
     }
@@ -471,6 +886,81 @@ public sealed class DebtController : Controller
         var maxId = codes.Select(x => ParseCodeSuffix(x, "TT")).DefaultIfEmpty(0).Max();
         return $"TT{(maxId + 1):0000}";
     }
+
+    private async Task<string> GetNextCollectionActionCodeAsync(CancellationToken ct)
+    {
+        var codes = await _db.XuLyThuHoiNos.AsNoTracking().Select(x => x.MaXuLy).ToListAsync(ct);
+        var maxId = codes.Select(x => ParseCodeSuffix(x, "XLN")).DefaultIfEmpty(0).Max();
+        return $"XLN{(maxId + 1):0000}";
+    }
+
+    private async Task<string> GetNextRestructureCodeAsync(CancellationToken ct)
+    {
+        var codes = await _db.CoCauNos.AsNoTracking().Select(x => x.MaCoCau).ToListAsync(ct);
+        var maxId = codes.Select(x => ParseCodeSuffix(x, "CCN")).DefaultIfEmpty(0).Max();
+        return $"CCN{(maxId + 1):0000}";
+    }
+
+    private async Task<int> GetNextScheduleCodeSuffixAsync(CancellationToken ct)
+    {
+        var codes = await _db.LichTraNos.AsNoTracking().Select(x => x.MaLichTraNo).ToListAsync(ct);
+        return codes.Select(x => ParseCodeSuffix(x, "LTN")).DefaultIfEmpty(0).Max() + 1;
+    }
+
+    private static IEnumerable<(int kyThu, DateOnly ngayPhaiTra, decimal goc, decimal lai)> BuildRestructuredSchedule(
+        decimal principal,
+        double annualRatePercent,
+        int remainingPeriods,
+        DateOnly disburseDate,
+        int paidPeriodCount)
+    {
+        if (principal <= 0 || remainingPeriods <= 0) yield break;
+
+        var r = (decimal)(annualRatePercent / 100d / 12d);
+        decimal payment;
+        if (r <= 0)
+        {
+            payment = principal / remainingPeriods;
+        }
+        else
+        {
+            var pow = (decimal)Math.Pow((double)(1m + r), -remainingPeriods);
+            payment = principal * r / (1m - pow);
+        }
+
+        var remaining = DecimalRoundMoney(principal);
+        for (var i = 1; i <= remainingPeriods; i++)
+        {
+            var interestRaw = r <= 0 ? 0m : remaining * r;
+            var interest = DecimalRoundMoney(interestRaw);
+
+            decimal principalPay;
+            if (i == remainingPeriods)
+            {
+                principalPay = remaining;
+            }
+            else
+            {
+                var principalRaw = payment - interestRaw;
+                principalPay = DecimalRoundMoney(principalRaw);
+                if (principalPay < 0m) principalPay = 0m;
+                if (principalPay > remaining) principalPay = remaining;
+            }
+
+            remaining -= principalPay;
+
+            var kyThu = paidPeriodCount + i;
+            yield return (
+                kyThu,
+                disburseDate.AddMonths(kyThu),
+                principalPay,
+                interest
+            );
+        }
+    }
+
+    private static decimal DecimalRoundMoney(decimal value) =>
+        Math.Round(value, 0, MidpointRounding.AwayFromZero);
 
     private static bool TryParseFlexibleDecimal(string? input, out decimal value)
     {
@@ -509,9 +999,33 @@ public sealed class DebtController : Controller
         return decimal.TryParse(s, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
     }
 
+    private static bool TryParseFlexibleDouble(string? input, out double value)
+    {
+        value = 0d;
+        if (!TryParseFlexibleDecimal(input, out var decimalValue)) return false;
+        value = (double)decimalValue;
+        return true;
+    }
+
     private static bool IsValidPaymentMethod(string method)
     {
         var m = (method ?? string.Empty).Trim();
         return m is "Tiền mặt" or "Chuyển khoản" or "Thu nợ tự động";
+    }
+
+    private static bool IsValidCollectionContactMethod(string method)
+    {
+        return method is "Gọi điện" or "SMS" or "Email" or "Gặp trực tiếp" or "Thông báo văn bản";
+    }
+
+    private static bool IsValidCollectionResult(string result)
+    {
+        return result is "Đã liên hệ" or "Không liên hệ được" or "Khách hẹn trả" or "Từ chối trả" or "Đã gửi thông báo";
+    }
+
+    private static bool IsValidCollectionProposal(string? proposal)
+    {
+        return string.IsNullOrWhiteSpace(proposal)
+            || proposal is "Tiếp tục theo dõi" or "Cơ cấu lại nợ" or "Xử lý tài sản bảo đảm" or "Chuyển pháp lý";
     }
 }

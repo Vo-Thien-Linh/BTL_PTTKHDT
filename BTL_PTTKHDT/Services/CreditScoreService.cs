@@ -37,7 +37,12 @@ public sealed class CreditScoreService : ICreditScoreService
 
         var today = DateOnly.FromDateTime(DateTime.Now);
         var hasLoanHistory = loans.Count > 0;
-        var score = hasLoanHistory ? 1000 : 650;
+        if (!hasLoanHistory)
+        {
+            return;
+        }
+
+        var score = 1000;
 
         var maxDebtGroup = loans.Select(x => (int)x.NhomNo).DefaultIfEmpty(1).Max();
         score -= maxDebtGroup switch
@@ -68,7 +73,7 @@ public sealed class CreditScoreService : ICreditScoreService
             .Sum(x => x.DuNoGoc);
 
         var monthlyIncome = monthlyIncomeOverride
-            ?? (isBusiness ? customer.DoanhThuBinhQuanThang : null)
+            ?? (isBusiness ? customer.DoanhThuBinhQuanThang : customer.ThuNhapHangThang)
             ?? previous?.ThuNhapHangThang;
         double? debtToIncome = null;
         if (monthlyIncome.HasValue && monthlyIncome.Value > 0)

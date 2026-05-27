@@ -6,11 +6,15 @@
     string typeValue = (Model.Type ?? string.Empty).Trim().ToLowerInvariant();
     bool isPersonal = typeValue is "canhan" or "ca-nhan" or "personal";
     bool isBusiness = typeValue is "doanhnghiep" or "doanh-nghiep" or "business";
+    string statusValue = (Model.Status ?? string.Empty).Trim().ToLowerInvariant();
+    bool isActiveStatus = statusValue is "active" or "hoatdong";
+    bool isInactiveStatus = statusValue is "inactive" or "tamngung";
 
     int totalPages = Model.TotalPages;
     if (totalPages < 1) totalPages = 1;
 }
 
+<div class="customer-list-page">
 <div class="d-flex align-items-center justify-content-between mb-3">
     <div class="h4 mb-0">Quản lý Khách hàng</div>
     <div class="d-flex align-items-center gap-2">
@@ -34,17 +38,17 @@
     <div class="alert alert-danger">@TempData["CustomerError"]</div>
 }
 
-<form method="get" class="card mb-3">
+<form method="get" class="card mb-3" data-auto-filter>
     <div class="card-body">
         <div class="row g-2 align-items-center">
-            <div class="col-12 col-lg-5">
+            <div class="col-12 col-xl-4">
                 <div class="input-group">
                     <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                     <input name="q" value="@Model.Query" class="form-control" placeholder="Tìm kiếm theo mã, họ tên, SĐT..." />
                 </div>
             </div>
 
-            <div class="col-12 col-lg-3">
+            <div class="col-12 col-md-6 col-xl-3">
                 <div class="input-group">
                     <span class="input-group-text bg-white"><i class="bi bi-funnel"></i></span>
                     <select name="type" class="form-select">
@@ -55,22 +59,29 @@
                 </div>
             </div>
 
-            <div class="col-12 col-lg-2">
-                <button class="btn btn-outline-secondary w-100" type="submit">Lọc</button>
+            <div class="col-12 col-md-6 col-xl-2">
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-toggle-on"></i></span>
+                    <select name="status" class="form-select">
+                        <option value="" selected="@(!isActiveStatus && !isInactiveStatus)">Tất cả trạng thái</option>
+                        <option value="active" selected="@isActiveStatus">Đang hoạt động</option>
+                        <option value="inactive" selected="@isInactiveStatus">Tạm ngừng</option>
+                    </select>
+                </div>
             </div>
 
-            <div class="col-12 col-lg-2">
+            <div class="col-12 col-md-6 col-xl-3">
                 <a class="btn btn-light w-100" href="@Url.Action("Index")">Xóa lọc</a>
             </div>
         </div>
     </div>
 </form>
 
-<div class="card">
+<div class="card customer-list-card">
     <div class="card-body p-0">
         @if (Model.Items.Count == 0)
         {
-            <div class="text-center text-secondary py-5">
+            <div class="customer-empty-state text-center text-secondary py-5">
                 <i class="bi bi-inbox" style="font-size: 3rem; opacity: 0.5;"></i>
                 <p class="mt-3 mb-0">Không có khách hàng phù hợp.</p>
             </div>
@@ -83,7 +94,7 @@
                     <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
                         <div class="card h-100 border-0 shadow-sm hover-card"
                              style="cursor: pointer;"
-                             onclick="window.location='@Url.Action("Edit", new { id = row.MaKh })'">
+                             onclick="window.location='@Url.Action("Details", new { id = row.MaKh })'">
                             <!-- Avatar Section -->
                             <div class="profile-card-head position-relative">
                                 <div class="profile-card-cover"></div>
@@ -120,7 +131,13 @@
                                 </span>
                                 <!-- Status Badge -->
                                 <div class="position-absolute" style="bottom: 12px; right: 12px;">
-                                    @if (row.IsActive)
+                                    @if (row.IsLocked)
+                                    {
+                                        <span class="badge status-badge-locked">
+                                            <span class="status-dot"></span>Đang khóa
+                                        </span>
+                                    }
+                                    else if (row.IsActive)
                                     {
                                         <span class="badge status-badge-active">
                                             <span class="status-dot"></span>Hoạt động
@@ -148,7 +165,7 @@
                                     </div>
                                     <div class="info-row">
                                         <span class="info-label"><i class="bi bi-calendar3 me-1"></i>Ngày sinh</span>
-                                        <span class="info-value">@row.NgaySinh.ToString("dd/MM/yyyy")</span>
+                                        <span class="info-value">@(row.NgaySinh == default ? "Chưa có" : row.NgaySinh.ToString("dd/MM/yyyy"))</span>
                                     </div>
                                     @if (!string.IsNullOrWhiteSpace(row.CmndCccd))
                                     {
@@ -201,7 +218,7 @@
         <nav aria-label="Customer pagination">
             <ul class="pagination pagination-sm mb-0">
                 <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, type = Model.Type, page = Model.Page - 1, pageSize = Model.PageSize })" aria-label="Previous">
+                    <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, type = Model.Type, status = Model.Status, page = Model.Page - 1, pageSize = Model.PageSize })" aria-label="Previous">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>
@@ -209,12 +226,12 @@
                 @for (int p = 1; p <= Math.Min(totalPages, 5); p++)
                 {
                     <li class="page-item @(p == Model.Page ? "active" : "")">
-                        <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, type = Model.Type, page = p, pageSize = Model.PageSize })">@p</a>
+                        <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, type = Model.Type, status = Model.Status, page = p, pageSize = Model.PageSize })">@p</a>
                     </li>
                 }
 
                 <li class="page-item @(Model.Page >= totalPages ? "disabled" : "")">
-                    <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, type = Model.Type, page = Model.Page + 1, pageSize = Model.PageSize })" aria-label="Next">
+                    <a class="page-link" href="@Url.Action("Index", new { q = Model.Query, type = Model.Type, status = Model.Status, page = Model.Page + 1, pageSize = Model.PageSize })" aria-label="Next">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
@@ -222,8 +239,41 @@
         </nav>
     </div>
 </div>
+</div>
 
 <style>
+    .customer-list-page {
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100vh - 92px);
+    }
+
+    .customer-list-card {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: calc(100vh - 235px);
+    }
+
+    .customer-list-card > .card-body {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+    }
+
+    .customer-list-card > .card-footer {
+        flex: 0 0 auto;
+    }
+
+    .customer-empty-state {
+        flex: 1 1 auto;
+        display: flex;
+        min-height: 320px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
     /* ── Card hover ── */
     .hover-card {
         transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -256,11 +306,11 @@
     .profile-avatar-wrap {
         position: absolute;
         left: 18px;
-        bottom: -28px;
-        width: 84px;
-        height: 84px;
+        bottom: -32px;
+        width: 96px;
+        height: 96px;
         border-radius: 999px;
-        padding: 4px;
+        padding: 3px;
         background: #fff;
         border: 1px solid #e5e7eb;
         box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
@@ -274,6 +324,7 @@
         align-items: center;
         justify-content: center;
         object-fit: cover;
+        object-position: center 25%;
     }
     .profile-avatar-placeholder {
         background: linear-gradient(135deg, #e0f2fe 0%, #f1f5f9 52%, #ccfbf1 100%);
@@ -281,7 +332,7 @@
         font-size: 2.25rem;
     }
     .profile-card-body {
-        padding-top: 2.25rem;
+        padding-top: 2.65rem;
     }
 
     .avatar-placeholder {
@@ -311,6 +362,16 @@
     }
     .status-badge-inactive {
         background: rgba(100,116,139,0.75);
+        backdrop-filter: blur(4px);
+        font-size: 0.72rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .status-badge-locked {
+        background: rgba(220,38,38,0.86);
         backdrop-filter: blur(4px);
         font-size: 0.72rem;
         padding: 4px 8px;

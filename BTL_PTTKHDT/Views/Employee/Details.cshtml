@@ -1,0 +1,179 @@
+@model BTL_PTTKHDT.Models.NhanVien
+
+@{
+    ViewData["Title"] = "Chi tiết nhân viên";
+    var account = Model.TaiKhoanNhanVien;
+}
+
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="mb-1">Chi tiết nhân viên</h2>
+            <div class="text-secondary">@Model.MaNvText</div>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="Index" class="btn btn-light">
+                <i class="bi bi-arrow-left me-1"></i>Quay lại
+            </a>
+            <a asp-action="Edit" asp-route-id="@Model.MaNv" class="btn btn-primary">
+                <i class="bi bi-pencil-square me-1"></i>Sửa
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    @if (!string.IsNullOrWhiteSpace(Model.AnhDaiDienUrl))
+                    {
+                        <img src="@Model.AnhDaiDienUrl" alt="@Model.HoTen" class="detail-avatar mb-3" />
+                    }
+                    else
+                    {
+                        <div class="detail-avatar detail-avatar-placeholder mb-3">
+                            <i class="bi bi-person"></i>
+                        </div>
+                    }
+                    <h4 class="mb-1">@Model.HoTen</h4>
+                    <div class="text-secondary mb-3">@Model.VaiTro</div>
+                    @if (Model.IsActive)
+                    {
+                        <span class="badge text-bg-success">Đang hoạt động</span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-secondary">Nghỉ việc</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">Thông tin cá nhân</div>
+                <div class="card-body">
+                    <div class="detail-grid">
+                        <div>
+                            <span>Mã nhân viên</span>
+                            <strong>@Model.MaNvText</strong>
+                        </div>
+                        <div>
+                            <span>Số điện thoại</span>
+                            <strong>@Model.SoDienThoai</strong>
+                        </div>
+                        <div>
+                            <span>Email</span>
+                            <strong>@(Model.Email ?? "Chưa có")</strong>
+                        </div>
+                        <div>
+                            <span>Ngày sinh</span>
+                            <strong>@(Model.NgaySinh == default ? "Chưa có" : Model.NgaySinh.ToString("dd/MM/yyyy"))</strong>
+                        </div>
+                        <div>
+                            <span>Giới tính</span>
+                            <strong>@(Model.GioiTinh ?? "Chưa có")</strong>
+                        </div>
+                        <div>
+                            <span>Ngày tạo</span>
+                            <strong>@Model.NgayTao.ToString("dd/MM/yyyy HH:mm")</strong>
+                        </div>
+                        <div class="detail-grid-wide">
+                            <span>Địa chỉ</span>
+                            <strong>@(Model.DiaChi ?? "Chưa có")</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header fw-semibold">Tài khoản đăng nhập</div>
+                <div class="card-body">
+                    @if (account == null)
+                    {
+                        <div class="text-secondary">Nhân viên này chưa có tài khoản đăng nhập.</div>
+                    }
+                    else
+                    {
+                        <div class="detail-grid">
+                            <div>
+                                <span>Mã tài khoản</span>
+                                <strong>@account.MaTaiKhoan</strong>
+                            </div>
+                            <div>
+                                <span>Tên đăng nhập</span>
+                                <strong>@account.TenDangNhap</strong>
+                            </div>
+                            <div>
+                                <span>Trạng thái</span>
+                                <strong>@(account.BiKhoa ? "Đang khóa" : "Đang mở")</strong>
+                            </div>
+                            <div>
+                                <span>Đăng nhập cuối</span>
+                                <strong>@(account.LanDangNhapCuoi?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa có")</strong>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .detail-avatar {
+        width: 132px;
+        height: 132px;
+        border-radius: 999px;
+        object-fit: cover;
+        object-position: center 25%;
+        border: 3px solid #fff;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
+    }
+
+    .detail-avatar-placeholder {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #eef2ff, #e0f2fe);
+        color: #4f46e5;
+        font-size: 3rem;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .detail-grid div {
+        min-height: 72px;
+        padding: .85rem 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .detail-grid span {
+        display: block;
+        color: #64748b;
+        font-size: .85rem;
+        margin-bottom: .35rem;
+    }
+
+    .detail-grid strong {
+        color: #14213d;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .detail-grid-wide {
+        grid-column: 1 / -1;
+    }
+
+    @@media (max-width: 575.98px) {
+        .detail-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>

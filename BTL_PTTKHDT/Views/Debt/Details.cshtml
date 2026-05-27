@@ -1,4 +1,4 @@
-@model BTL_PTTKHDT.Models.DebtLoanDetailViewModel
+﻿@model BTL_PTTKHDT.Models.DebtLoanDetailViewModel
 @{
     string Vnd(decimal amount) =>
         amount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) + " VNĐ";
@@ -10,8 +10,8 @@
     ViewData["Title"] = ViewData["Title"] ?? "Chi tiết khoản vay";
 }
 
-<div class="container-fluid">
-    <div class="d-flex align-items-start justify-content-between mb-3">
+<div class="container-fluid debt-detail-page">
+    <div class="d-flex align-items-start justify-content-between mb-2">
         <div>
             <h2 class="mb-1">@ViewData["Title"]</h2>
             <div class="text-secondary">Mã vay: <span class="fw-semibold">@Model.Loan.MaVay</span> - Mã đơn: <span class="fw-semibold">@Model.Loan.MaDon</span></div>
@@ -23,9 +23,17 @@
     {
         <div class="alert alert-danger">@TempData["DebtError"]</div>
     }
+    @if (TempData["DebtSuccess"] != null)
+    {
+        <div class="alert alert-success">@TempData["DebtSuccess"]</div>
+    }
+    @if (ViewData["DebtFeatureWarning"] != null)
+    {
+        <div class="alert alert-warning">@ViewData["DebtFeatureWarning"]</div>
+    }
 
-    <div class="row g-3">
-        <div class="col-lg-7">
+    <div class="row g-2">
+        <div class="col-12">
             <div class="card p-3">
                 <div class="row g-2">
                     <div class="col-md-6">
@@ -61,7 +69,28 @@
                 </div>
             </div>
 
-            <div class="card p-3 mt-3">
+            <div class="debt-action-strip mt-3">
+                <button class="btn btn-sm btn-outline-primary active" type="button" data-bs-toggle="collapse" data-bs-target="#debtPayPanel" aria-expanded="true" aria-controls="debtPayPanel">
+                    <i class="bi bi-cash-coin me-1"></i>Thanh toán
+                </button>
+                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#debtSchedulePanel" aria-expanded="false" aria-controls="debtSchedulePanel">
+                    <i class="bi bi-calendar-week me-1"></i>Lịch trả nợ
+                </button>
+                <button class="btn btn-sm btn-outline-success" type="button" data-bs-toggle="collapse" data-bs-target="#debtPayoffPanel" aria-expanded="false" aria-controls="debtPayoffPanel">
+                    <i class="bi bi-check2-circle me-1"></i>Tất toán
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target=".debt-extra-info" aria-expanded="false">
+                    <i class="bi bi-folder2-open me-1"></i>Hồ sơ liên quan
+                </button>
+                <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="collapse" data-bs-target="#debtCollectionPanel" aria-expanded="false" aria-controls="debtCollectionPanel">
+                    <i class="bi bi-telephone-outbound me-1"></i>Thu hồi nợ
+                </button>
+                <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="collapse" data-bs-target="#debtRestructurePanel" aria-expanded="false" aria-controls="debtRestructurePanel">
+                    <i class="bi bi-arrow-repeat me-1"></i>Cơ cấu nợ
+                </button>
+            </div>
+
+            <div id="debtPayPanel" class="collapse show card p-3 mt-3 debt-action-panel">
                 <div class="fw-semibold mb-2">Ghi nhận thanh toán</div>
                 <form asp-action="Pay" asp-route-id="@Model.Loan.MaVay" method="post" class="row g-2">
                     @Html.AntiForgeryToken()
@@ -101,7 +130,7 @@
                 </form>
             </div>
 
-            <div class="card p-3 mt-3">
+            <div id="debtPayoffPanel" class="collapse card p-3 mt-3 debt-action-panel">
                 <div class="d-flex align-items-start justify-content-between gap-3">
                     <div>
                         <div class="fw-semibold">Tất toán nhanh</div>
@@ -131,7 +160,7 @@
                 </form>
             </div>
 
-            <div class="card p-3 mt-3">
+            <div id="debtSchedulePanel" class="collapse card p-3 mt-3 debt-action-panel">
                 <div class="fw-semibold mb-2">Lịch trả nợ</div>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
@@ -151,7 +180,13 @@
                             <tr>
                                 <td class="fw-semibold">@s.KyThu</td>
                                 <td>@s.NgayPhaiTra.ToString("dd/MM/yyyy")</td>
-                                <td class="text-end">@Vnd(s.SoTienGoc)</td>
+                                <td class="text-end">
+                                    <div>@Vnd(s.SoTienGoc)</div>
+                                    @if (s.SoTienGoc <= 0 && s.SoTienLai > 0)
+                                    {
+                                        <span class="badge text-bg-info" title="@s.GhiChu">Ân hạn gốc</span>
+                                    }
+                                </td>
                                 <td class="text-end">@Vnd(s.SoTienLai)</td>
                                 <td class="text-end">@Vnd(s.SoTienDaThanhToan)</td>
                                 <td class="text-center">
@@ -173,8 +208,8 @@
             </div>
         </div>
 
-        <div class="col-lg-5">
-            <div class="card p-3">
+        <div class="col-12">
+            <div class="collapse debt-extra-info card p-3 debt-action-panel">
                 <div class="fw-semibold mb-2">Tài sản thế chấp</div>
                 @if (Model.TaiSanTheChap.Count == 0)
                 {
@@ -210,7 +245,7 @@
                 }
             </div>
 
-            <div class="card p-3 mt-3">
+            <div class="collapse debt-extra-info card p-3 mt-3 debt-action-panel">
                 <div class="fw-semibold mb-2">Hợp đồng tín dụng</div>
                 @if (Model.HopDong == null)
                 {
@@ -226,9 +261,231 @@
                     <div class="fw-semibold">@Model.HopDong.MaNv</div>
                 }
             </div>
+
+            <div id="debtCollectionPanel" class="collapse card p-3 mt-3 debt-action-panel">
+                <div class="fw-semibold mb-2">Xử lý thu hồi nợ</div>
+                <form asp-action="RecordCollectionAction" asp-route-id="@Model.Loan.MaVay" method="post" class="row g-2">
+                    @Html.AntiForgeryToken()
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary mb-1">Hình thức liên hệ</label>
+                        <select name="HinhThucLienHe" class="form-select form-select-sm">
+                            <option>Gọi điện</option>
+                            <option>SMS</option>
+                            <option>Email</option>
+                            <option>Gặp trực tiếp</option>
+                            <option>Thông báo văn bản</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary mb-1">Kết quả</label>
+                        <select name="KetQua" class="form-select form-select-sm">
+                            <option>Đã liên hệ</option>
+                            <option>Không liên hệ được</option>
+                            <option>Khách hẹn trả</option>
+                            <option>Từ chối trả</option>
+                            <option>Đã gửi thông báo</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary mb-1">Ngày hẹn trả</label>
+                        <input name="NgayHenTra" type="date" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary mb-1">Số tiền hẹn trả</label>
+                        <input name="SoTienHenTra" class="form-control form-control-sm" inputmode="numeric" />
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label small text-secondary mb-1">Đề xuất xử lý</label>
+                        <select name="DeXuatXuLy" class="form-select form-select-sm">
+                            <option value="">Không có</option>
+                            <option>Tiếp tục theo dõi</option>
+                            <option>Cơ cấu lại nợ</option>
+                            <option>Xử lý tài sản bảo đảm</option>
+                            <option>Chuyển pháp lý</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small text-secondary mb-1">Ghi chú xử lý</label>
+                        <textarea name="GhiChu" class="form-control form-control-sm" rows="3" placeholder="Nội dung trao đổi, cam kết trả nợ, lý do chậm trả..."></textarea>
+                    </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button class="btn btn-sm btn-warning" type="submit">Ghi nhận xử lý</button>
+                    </div>
+                </form>
+
+                <hr />
+
+                <div class="fw-semibold mb-2">Lịch sử xử lý</div>
+                @if (Model.XuLyThuHoiNo.Count == 0)
+                {
+                    <div class="text-secondary small">Chưa có ghi nhận xử lý thu hồi nợ.</div>
+                }
+                else
+                {
+                    <div class="d-flex flex-column gap-2">
+                        @foreach (var item in Model.XuLyThuHoiNo)
+                        {
+                            <div class="border rounded-3 p-2">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div class="fw-semibold">@item.HinhThucLienHe - @item.KetQua</div>
+                                    <div class="text-secondary small">@item.NgayXuLy.ToString("dd/MM/yyyy HH:mm")</div>
+                                </div>
+                                <div class="text-secondary small">NV: @(item.TenNhanVien ?? item.MaNv)</div>
+                                @if (item.NgayHenTra.HasValue || item.SoTienHenTra.HasValue)
+                                {
+                                    <div class="small">
+                                        Hẹn trả:
+                                        @(item.NgayHenTra?.ToString("dd/MM/yyyy") ?? "...")
+                                        @if (item.SoTienHenTra.HasValue)
+                                        {
+                                            <span>- @Vnd(item.SoTienHenTra.Value)</span>
+                                        }
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.DeXuatXuLy))
+                                {
+                                    <div class="small">Đề xuất: <span class="fw-semibold">@item.DeXuatXuLy</span></div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.GhiChu))
+                                {
+                                    <div class="text-secondary small mt-1">@item.GhiChu</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div id="debtRestructurePanel" class="collapse card p-3 mt-3 debt-action-panel">
+                <div class="fw-semibold mb-2">Cơ cấu lại khoản vay</div>
+                <div class="alert alert-info py-2 small mb-3">
+                    Cơ cấu nợ sẽ xóa các kỳ chưa trả, tạo lại lịch trả nợ theo kỳ hạn/lãi suất mới và ghi lịch sử cơ cấu. Bắt buộc nhập lý do.
+                </div>
+                <form asp-action="RestructureLoan" asp-route-id="@Model.Loan.MaVay" method="post" class="row g-2" onsubmit="return confirm('Xác nhận cơ cấu lại khoản vay và tạo lại lịch trả nợ chưa thanh toán?');">
+                    @Html.AntiForgeryToken()
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary mb-1">Kỳ hạn mới</label>
+                        <input name="KyHanMoi" class="form-control form-control-sm" inputmode="numeric" min="1" value="@Model.CoCauMoi.KyHanMoi" />
+                        <div class="form-text">Ví dụ: từ 12 tháng đổi thành 24 tháng.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-secondary mb-1">Lãi suất mới</label>
+                        <input name="LaiSuatMoi" class="form-control form-control-sm" inputmode="decimal" value="@Model.Loan.LaiSuat.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
+                        <div class="form-text">Để nguyên nếu giữ lãi suất hiện tại.</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small text-secondary mb-1">Lý do cơ cấu</label>
+                        <textarea name="LyDo" class="form-control form-control-sm" rows="2" required maxlength="500" placeholder="Ví dụ: khách hàng gặp khó khăn dòng tiền, đề nghị giãn thời hạn trả nợ..."></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small text-secondary mb-1">Ghi chú</label>
+                        <input name="GhiChu" class="form-control form-control-sm" placeholder="Ghi chú nội bộ nếu có" />
+                    </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button class="btn btn-sm btn-outline-warning" type="submit" @(isPaidOff ? "disabled" : null)>Cơ cấu khoản vay</button>
+                    </div>
+                </form>
+
+                <hr />
+
+                <div class="fw-semibold mb-2">Lịch sử cơ cấu</div>
+                @if (Model.LichSuCoCauNo.Count == 0)
+                {
+                    <div class="text-secondary small">Chưa có lần cơ cấu nào.</div>
+                }
+                else
+                {
+                    <div class="d-flex flex-column gap-2">
+                        @foreach (var item in Model.LichSuCoCauNo)
+                        {
+                            <div class="border rounded-3 p-2">
+                                <div class="d-flex justify-content-between gap-2">
+                                    <div class="fw-semibold">@item.MaCoCau</div>
+                                    <div class="text-secondary small">@item.NgayCoCau.ToString("dd/MM/yyyy HH:mm")</div>
+                                </div>
+                                <div class="small">Kỳ hạn: @item.KyHanCu tháng -> @item.KyHanMoi tháng</div>
+                                <div class="small">Lãi suất: @item.LaiSuatCu.ToString("0.##")% -> @item.LaiSuatMoi.ToString("0.##")%</div>
+                                <div class="small">Đáo hạn: @item.NgayDaoHanCu.ToString("dd/MM/yyyy") -> @item.NgayDaoHanMoi.ToString("dd/MM/yyyy")</div>
+                                <div class="small">Dư nợ cơ cấu: @Vnd(item.DuNoGocCoCau)</div>
+                                <div class="text-secondary small">NV: @(item.TenNhanVien ?? item.MaNv)</div>
+                                <div class="small mt-1">Lý do: @item.LyDo</div>
+                                @if (!string.IsNullOrWhiteSpace(item.GhiChu))
+                                {
+                                    <div class="text-secondary small">@item.GhiChu</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+    .debt-detail-page {
+        max-width: 1180px;
+    }
+
+    .debt-summary-card {
+        padding: .8rem !important;
+    }
+
+    .debt-summary-card > .row {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr repeat(5, minmax(120px, 1fr));
+        gap: .5rem;
+    }
+
+    .debt-summary-card > .row > [class*="col-"] {
+        width: auto;
+        padding: .55rem .65rem;
+        border: 1px solid #e2eaf3;
+        border-radius: 8px;
+        background: #fbfdff;
+    }
+
+    .debt-action-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .debt-action-strip .btn {
+        min-height: 34px;
+        white-space: nowrap;
+    }
+
+    .debt-action-strip .btn.active {
+        background: #0d9488;
+        border-color: #0d9488;
+        color: #fff;
+    }
+
+    .debt-action-panel {
+        max-width: 100%;
+    }
+
+    .debt-action-panel.card {
+        padding: .85rem !important;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .debt-summary-card > .row {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .debt-summary-card > .row {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 
 @section Scripts {
     <script>
@@ -265,5 +522,30 @@
 
             fillAmountFromSelectedSchedule();
         })();
+
+        (function () {
+            const panels = Array.from(document.querySelectorAll('.debt-action-panel'));
+            const buttons = Array.from(document.querySelectorAll('.debt-action-strip [data-bs-toggle="collapse"]'));
+
+            panels.forEach(function (panel) {
+                panel.addEventListener('show.bs.collapse', function () {
+                    const showingRelated = panel.classList.contains('debt-extra-info');
+                    panels.forEach(function (other) {
+                        const keepRelatedTogether = showingRelated && other.classList.contains('debt-extra-info');
+                        if (other !== panel && !keepRelatedTogether && other.classList.contains('show')) {
+                            bootstrap.Collapse.getOrCreateInstance(other, { toggle: false }).hide();
+                        }
+                    });
+
+                    buttons.forEach(function (button) {
+                        const target = button.getAttribute('data-bs-target');
+                        const isRelated = target === '.debt-extra-info' && panel.classList.contains('debt-extra-info');
+                        button.classList.toggle('active', target === '#' + panel.id || isRelated);
+                    });
+                });
+            });
+        })();
     </script>
 }
+
+

@@ -15,13 +15,12 @@
         </div>
     </div>
 
-    <form method="get" class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <form method="get" class="d-flex align-items-center gap-2 mb-3 flex-wrap" data-auto-filter>
         <div class="input-group input-group-sm" style="width: min(360px, 100%);">
             <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
             <input name="q" value="@Model.Query" class="form-control" placeholder="Tìm mã đơn / khách hàng / mục đích..." />
         </div>
-        <button class="btn btn-sm btn-outline-primary" type="submit">Tìm</button>
-        <div class="text-secondary small ms-auto">Hiển thị @Model.From-@Model.To cua @Model.TotalCount ho so</div>
+        <div class="text-secondary small ms-auto">Hiển thị @Model.From-@Model.To của @Model.TotalCount hồ sơ</div>
     </form>
 
     <div class="card section-card p-0">
@@ -35,6 +34,7 @@
                         <th class="text-end">Số tiền</th>
                         <th class="text-end">TSDB</th>
                         <th class="text-end">Hạn mức gợi ý</th>
+                        <th class="text-end">Có thể giải ngân</th>
                         <th class="text-center">Điều kiện</th>
                         <th class="text-end pe-3">Thao tác</th>
                     </tr>
@@ -43,7 +43,7 @@
                 @if (Model.Items.Count == 0)
                 {
                     <tr>
-                        <td colspan="8" class="text-center text-secondary p-4">Không có hồ sơ nào đang chờ giải ngân.</td>
+                        <td colspan="9" class="text-center text-secondary p-4">Không có hồ sơ nào đang chờ giải ngân.</td>
                     </tr>
                 }
                 else
@@ -60,9 +60,10 @@
                             <td class="text-end fw-semibold">@Vnd(item.SoTienYeuCau)</td>
                             <td class="text-end">@Vnd(item.TongGiaTriDamBao)</td>
                             <td class="text-end">@Vnd(item.HanMucGoiY)</td>
+                            <td class="text-end fw-semibold">@Vnd(item.SoTienCoTheGiaiNgan)</td>
                             <td class="text-center">
-                                <span class="status-chip @(item.DaDuDieuKienTaiSan ? "status-chip-success" : "status-chip-warning")">
-                                    @(item.DaDuDieuKienTaiSan ? "Đủ TSĐB" : "Thiếu TSĐB")
+                                <span class="status-chip @(item.DaDuDieuKienTaiSan && item.DaDuDieuKienHanMuc ? "status-chip-success" : "status-chip-warning")">
+                                    @(item.DaDuDieuKienTaiSan && item.DaDuDieuKienHanMuc ? "Đạt" : "Chưa đạt")
                                 </span>
                             </td>
                             <td class="text-end pe-3">

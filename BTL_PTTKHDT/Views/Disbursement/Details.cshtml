@@ -10,11 +10,11 @@
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
                 <h2 class="page-hero-title">Kiểm tra giải ngân: @Model.Loan.MaDon</h2>
-                <div class="page-hero-subtitle small">Buoc tach rieng sau phe duyet, truoc khi tao khoan vay va lich tra no.</div>
+                <div class="page-hero-subtitle small">Bước tách riêng sau phê duyệt, trước khi tạo khoản vay và lịch trả nợ.</div>
             </div>
             <div class="d-flex gap-2">
-                <a asp-controller="Loan" asp-action="Details" asp-route-id="@Model.Loan.MaDon" class="btn btn-sm btn-outline-secondary">Xem ho so vay</a>
-                <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Quay lai</a>
+                <a asp-controller="Loan" asp-action="Details" asp-route-id="@Model.Loan.MaDon" class="btn btn-sm btn-outline-secondary">Xem hồ sơ vay</a>
+                <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Quay lại</a>
             </div>
         </div>
     </div>
@@ -63,6 +63,14 @@
                         <div class="fw-semibold">@Vnd(Model.Loan.HanMucGoiY)</div>
                     </div>
                     <div class="col-md-4">
+                        <div class="text-secondary small">Hạn mức tín dụng còn lại</div>
+                        <div class="fw-semibold">@(Model.Loan.HanMucTinDungConLai.HasValue ? Vnd(Model.Loan.HanMucTinDungConLai.Value) : "Chưa cấp")</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Có thể giải ngân</div>
+                        <div class="fw-semibold">@Vnd(Model.Loan.SoTienCoTheGiaiNgan)</div>
+                    </div>
+                    <div class="col-md-4">
                         <div class="text-secondary small">LTV yêu cầu / TSĐB</div>
                         <div class="fw-semibold">@(ltv <= 0 ? "-" : $"{ltv * 100m:0.0}%")</div>
                     </div>
@@ -81,7 +89,7 @@
                             <tr>
                                 <th>Mã TS</th>
                                 <th>Loại tài sản</th>
-                                <th class="text-end">Gia tri</th>
+                                <th class="text-end">Giá trị</th>
                                 <th class="text-center">LTV</th>
                                 <th class="text-center">Định giá</th>
                                 <th class="text-center">Sở hữu</th>
@@ -91,7 +99,7 @@
                         @if (Model.TaiSanDamBao.Count == 0)
                         {
                             <tr>
-                                <td colspan="6" class="text-center text-secondary p-4">Chưa có tai san dam bao.</td>
+                                <td colspan="6" class="text-center text-secondary p-4">Chưa có tài sản đảm bảo.</td>
                             </tr>
                         }
                         else
@@ -126,7 +134,7 @@
 
                 <div class="d-flex flex-column gap-2">
                     <div class="d-flex align-items-center justify-content-between">
-                        <span class="text-secondary">Ho so da duyet</span>
+                        <span class="text-secondary">Hồ sơ đã duyệt</span>
                         <span class="status-chip status-chip-success">Có</span>
                     </div>
                     <div class="d-flex align-items-center justify-content-between">
@@ -136,7 +144,13 @@
                         </span>
                     </div>
                     <div class="d-flex align-items-center justify-content-between">
-                        <span class="text-secondary">Khoan vay dang hoat dong</span>
+                        <span class="text-secondary">Hạn mức khả dụng</span>
+                        <span class="status-chip @(Model.Loan.DaDuDieuKienHanMuc ? "status-chip-success" : "status-chip-warning")">
+                            @(Model.Loan.DaDuDieuKienHanMuc ? "Đạt" : "Chưa đạt")
+                        </span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-secondary">Khoản vay đang hoạt động</span>
                         <span class="status-chip @(Model.HasActiveLoan ? "status-chip-warning" : "status-chip-success")">
                             @(Model.HasActiveLoan ? "Có" : "Không")
                         </span>

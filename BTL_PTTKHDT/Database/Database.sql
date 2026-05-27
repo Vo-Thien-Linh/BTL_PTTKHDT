@@ -26,8 +26,11 @@ CREATE TABLE KhachHang (
     LinhVucKinhDoanh NVARCHAR(150) NULL,
     DoanhThuBinhQuanThang MONEY NULL,
     LoiNhuanBinhQuanThang MONEY NULL,
-    SoLaoDong INT NULL
-
+    SoLaoDong INT NULL,
+    NgheNghiep NVARCHAR(100) NULL,
+    NoiLamViec NVARCHAR(150) NULL,
+    ChucVu NVARCHAR(100) NULL,
+    ThuNhapHangThang MONEY NULL
 );
 GO
 
@@ -40,7 +43,6 @@ CREATE TABLE NhanVien (
     HoTen          NVARCHAR(100)   NOT NULL,
     SoDienThoai    VARCHAR(15)     NOT NULL,
     DiaChi         NVARCHAR(255),
-    Email          VARCHAR(150),
     NgaySinh       DATE            NOT NULL,
 
     GioiTinh       NVARCHAR(10)
@@ -60,7 +62,8 @@ CREATE TABLE NhanVien (
 
     NgayTao        DATETIME        NOT NULL DEFAULT GETDATE(),
 
-    IsActive       BIT             NOT NULL DEFAULT 1
+    IsActive       BIT             NOT NULL DEFAULT 1,
+    Email VARCHAR(150)
 );
 GO
 
@@ -84,12 +87,32 @@ CREATE TABLE TaiKhoanNhanVien (
     BiKhoa          BIT NOT NULL DEFAULT 0,
 
     NgayTao         DATETIME NOT NULL DEFAULT GETDATE(),
-    NgayCapNhat     DATETIME NOT NULL DEFAULT GETDATE(),
-    ResetPasswordCodeHash NVARCHAR(256) NULL,
-    ResetPasswordExpiresAt DATETIME NULL
+    NgayCapNhat     DATETIME NOT NULL DEFAULT GETDATE()
 );
 GO
 
+-- -------------------------------------------------
+-- 3A. TÀI KHOẢN ĐĂNG NHẬP KHÁCH HÀNG
+-- -------------------------------------------------
+CREATE TABLE TaiKhoanKhachHang (
+    MaTaiKhoanKH    VARCHAR(10) PRIMARY KEY,
+
+    MaKH            VARCHAR(10) NOT NULL UNIQUE
+        FOREIGN KEY REFERENCES KhachHang(MaKH),
+
+    TenDangNhap     NVARCHAR(50) NOT NULL UNIQUE,
+    MatKhauHash     NVARCHAR(256) NOT NULL,
+
+    LanDangNhapCuoi DATETIME NULL,
+
+    SoLanSaiMatKhau TINYINT NOT NULL DEFAULT 0,
+
+    BiKhoa          BIT NOT NULL DEFAULT 0,
+
+    NgayTao         DATETIME NOT NULL DEFAULT GETDATE(),
+    NgayCapNhat     DATETIME NOT NULL DEFAULT GETDATE()
+);
+GO
 
 -- ============================================================
 -- PHẦN 3: LUỒNG XIN VAY (LOAN ORIGINATION)
@@ -530,24 +553,60 @@ CREATE TABLE BaoCaoTaiSanLog (
 );
 GO
 
+    CREATE TABLE XuLyThuHoiNo (
+        MaXuLy          VARCHAR(10) PRIMARY KEY,
+        MaVay           VARCHAR(10) NOT NULL,
+        MaNV            VARCHAR(10) NOT NULL,
+        NgayXuLy        DATETIME NOT NULL CONSTRAINT DF_XuLyThuHoiNo_NgayXuLy DEFAULT GETDATE(),
+        HinhThucLienHe  NVARCHAR(30) NOT NULL,
+        KetQua          NVARCHAR(30) NOT NULL,
+        NgayHenTra      DATE NULL,
+        SoTienHenTra    MONEY NULL,
+        DeXuatXuLy      NVARCHAR(50) NULL,
+        GhiChu          NVARCHAR(500) NULL,
+        CONSTRAINT FK_XuLyThuHoiNo_KhoanVay FOREIGN KEY (MaVay) REFERENCES KhoanVay(MaVay),
+        CONSTRAINT FK_XuLyThuHoiNo_NhanVien FOREIGN KEY (MaNV) REFERENCES NhanVien(MaNV),
+        CONSTRAINT CK_XuLyThuHoiNo_HinhThuc CHECK (HinhThucLienHe IN (
+            N'Gọi điện', N'SMS', N'Email', N'Gặp trực tiếp', N'Thông báo văn bản'
+        )),
+        CONSTRAINT CK_XuLyThuHoiNo_KetQua CHECK (KetQua IN (
+            N'Đã liên hệ', N'Không liên hệ được', N'Khách hẹn trả', N'Từ chối trả', N'Đã gửi thông báo'
+        )),
+        CONSTRAINT CK_XuLyThuHoiNo_SoTienHenTra CHECK (SoTienHenTra IS NULL OR SoTienHenTra >= 0),
+        CONSTRAINT CK_XuLyThuHoiNo_DeXuat CHECK (DeXuatXuLy IS NULL OR DeXuatXuLy IN (
+            N'Tiếp tục theo dõi', N'Cơ cấu lại nợ', N'Xử lý tài sản bảo đảm', N'Chuyển pháp lý'
+        ))
+    );
 
-INSERT INTO NhanVien (
-    MaNV, HoTen, SoDienThoai, DiaChi, NgaySinh,
-    GioiTinh, VaiTro, AnhDaiDienUrl, IsActive
-)
-VALUES (
-    'NV999', N'Quản trị viên', '0123456788', N'Lê Văn Việt',
-    '1990-01-01', N'Nam', N'Quản trị hệ thống', NULL, 1
+        CREATE TABLE CoCauNo (
+        MaCoCau        VARCHAR(10) PRIMARY KEY,
+        MaVay          VARCHAR(10) NOT NULL,
+        MaNV           VARCHAR(10) NOT NULL,
+        NgayCoCau      DATETIME NOT NULL CONSTRAINT DF_CoCauNo_NgayCoCau DEFAULT GETDATE(),
+        KyHanCu        INT NOT NULL,
+        KyHanMoi       INT NOT NULL,
+        LaiSuatCu      FLOAT NOT NULL,
+        LaiSuatMoi     FLOAT NOT NULL,
+        NgayDaoHanCu   DATE NOT NULL,
+        NgayDaoHanMoi  DATE NOT NULL,
+        DuNoGocCoCau   MONEY NOT NULL,
+        LyDo           NVARCHAR(500) NOT NULL,
+        GhiChu         NVARCHAR(500) NULL,
+        CONSTRAINT FK_CoCauNo_KhoanVay FOREIGN KEY (MaVay) REFERENCES KhoanVay(MaVay),
+        CONSTRAINT FK_CoCauNo_NhanVien FOREIGN KEY (MaNV) REFERENCES NhanVien(MaNV),
+        CONSTRAINT CK_CoCauNo_KyHanCu CHECK (KyHanCu > 0),
+        CONSTRAINT CK_CoCauNo_KyHanMoi CHECK (KyHanMoi > 0),
+        CONSTRAINT CK_CoCauNo_LaiSuatCu CHECK (LaiSuatCu > 0),
+        CONSTRAINT CK_CoCauNo_LaiSuatMoi CHECK (LaiSuatMoi > 0),
+        CONSTRAINT CK_CoCauNo_DuNoGoc CHECK (DuNoGocCoCau >= 0)
+    );
+
+     CREATE TABLE PhanQuyenVaiTro (
+    VaiTro       NVARCHAR(50) NOT NULL,
+    MaQuyen      VARCHAR(100) NOT NULL,
+    DuocCap      BIT NOT NULL DEFAULT 1,
+    NgayCapNhat  DATETIME NOT NULL DEFAULT GETDATE(),
+
+    CONSTRAINT PK_PhanQuyenVaiTro PRIMARY KEY (VaiTro, MaQuyen)
 );
-
-INSERT INTO TaiKhoanNhanVien (
-    MaTaiKhoan, MaNV, TenDangNhap, MatKhauHash,
-    SoLanSaiMatKhau, BiKhoa
-)
-
-
-VALUES (
-    'TK999', 'NV999', N'admin',
-    '8D969EEF6ECAD3C29A3A629280E686CF0C3F5D5A86AFF3CA12020C923ADC6C92',
-    0, 0
-);
+GO

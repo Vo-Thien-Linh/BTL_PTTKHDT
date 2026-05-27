@@ -54,4 +54,13 @@ public sealed class KhachHangValidationMetadata
 
     [StringLength(150, ErrorMessage = "Linh vuc kinh doanh khong duoc vuot qua 150 ky tu.")]
     public string? LinhVucKinhDoanh { get; set; }
+
+    [StringLength(100, ErrorMessage = "Nghe nghiep khong duoc vuot qua 100 ky tu.")]
+    public string? NgheNghiep { get; set; }
+
+    [StringLength(150, ErrorMessage = "Noi lam viec khong duoc vuot qua 150 ky tu.")]
+    public string? NoiLamViec { get; set; }
+
+    [StringLength(100, ErrorMessage = "Chuc vu khong duoc vuot qua 100 ky tu.")]
+    public string? ChucVu { get; set; }
 }

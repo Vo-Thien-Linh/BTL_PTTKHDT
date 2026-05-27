@@ -11,62 +11,74 @@
     ViewData["Title"] = "Chi tiết đơn vay";
 }
 
-<div class="container-fluid">
-    <div class="d-flex align-items-start justify-content-between mb-3">
+<div class="container-fluid loan-detail-page">
+    <div class="d-flex align-items-start justify-content-between mb-2">
         <div>
             <h2 class="mb-1">@ViewData["Title"]</h2>
             <div class="text-secondary">Mã đơn: <span class="fw-semibold">@Model.Loan.MaDon</span></div>
         </div>
-        <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Quay lại</a>
+        <div class="d-flex align-items-center gap-2">
+            @if (Model.CanDelete)
+            {
+                <form asp-action="Delete" asp-route-id="@Model.Loan.MaDon" method="post" class="m-0"
+                      onsubmit="return confirm('Xóa hồ sơ vay này? Thao tác này chỉ áp dụng khi hồ sơ chưa duyệt cấp 2/3 và chưa sinh khoản vay.');">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash me-1"></i> Xóa hồ sơ
+                    </button>
+                </form>
+            }
+            <a asp-action="Index" class="btn btn-sm btn-outline-secondary">Quay lại</a>
+        </div>
     </div>
 
-    <div class="row g-3">
+    <div class="row g-2">
         <div class="col-12">
-            <div class="card p-3">
-                <div class="row g-3">
-                    <div class="col-md-6">
+            <div class="card p-3 loan-summary-card">
+                <div class="loan-summary-grid">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Mã khách hàng</div>
                         <div class="fw-semibold">@Model.Loan.MaKh</div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Tên khách hàng</div>
                         <div class="fw-semibold">@Model.Loan.TenKhachHang</div>
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Loại khách hàng</div>
                         <div class="fw-semibold">@(Model.Loan.LoaiKhachHang == "business" ? "Doanh nghiệp" : "Cá nhân")</div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Giấy tờ</div>
                         <div class="fw-semibold">@Model.Loan.NhanDangGiayTo @Model.Loan.SoGiayTo</div>
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Số tiền yêu cầu</div>
                         <div class="fw-semibold">@Vnd(Model.Loan.SoTienYeuCau)</div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="loan-summary-item loan-summary-item-wide">
                         <div class="text-secondary small">Mục đích vay</div>
                         <div class="fw-semibold">@Model.Loan.MucDichVay</div>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Kỳ hạn đề nghị</div>
                         <div class="fw-semibold">@Model.KyHanDeNghi tháng</div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Lãi suất đề nghị</div>
                         <div class="fw-semibold">@(Model.LaiSuatDeNghi.HasValue ? $"{Model.LaiSuatDeNghi:0.##}%" : "-")</div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="loan-summary-item">
                         <div class="text-secondary small">Ngày nộp đơn</div>
                         <div class="fw-semibold">@Model.NgayNopDon.ToString("dd/MM/yyyy")</div>
                     </div>
 
                     @if (!string.IsNullOrWhiteSpace(Model.GhiChu))
                     {
-                        <div class="col-12">
+                        <div class="loan-summary-item loan-summary-item-wide">
                             <div class="text-secondary small mb-1">Ghi chú</div>
                             <div class="fw-semibold">@Model.GhiChu</div>
                         </div>
@@ -77,8 +89,17 @@
 
     </div>
 
-    <div class="card section-card p-3 mt-3">
-        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+    @if (TempData["CreditLimitError"] != null)
+    {
+        <div class="alert alert-danger mt-2 mb-0">@TempData["CreditLimitError"]</div>
+    }
+    @if (TempData["CreditLimitSuccess"] != null)
+    {
+        <div class="alert alert-success mt-2 mb-0">@TempData["CreditLimitSuccess"]</div>
+    }
+
+    <div class="card section-card p-3 mt-2 loan-appraisal-card">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
             <div>
                 <div class="section-card-title">
                     <i class="bi bi-clipboard2-check"></i>
@@ -96,9 +117,9 @@
             </div>
         </div>
 
-        <div class="row g-3">
+        <div class="row g-2">
             <div class="col-lg-4">
-                <div class="soft-panel p-3 h-100">
+                <div class="soft-panel p-3 loan-appraisal-panel">
                     <div class="fw-semibold mb-2">I. Thông tin và tư cách khách hàng</div>
                     <div class="small text-secondary">Mã KH</div>
                     <div class="fw-semibold mb-2">@report.MaKh</div>
@@ -118,16 +139,16 @@
             </div>
 
             <div class="col-lg-4">
-                <div class="soft-panel p-3 h-100">
+                <div class="soft-panel p-3 loan-appraisal-panel">
                     <div class="fw-semibold mb-2">II. Tài chính và lịch sử tín dụng</div>
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="small text-secondary">Điểm tín dụng</div>
-                            <div class="h4 mb-0">@((report.DiemTinDung?.ToString()) ?? "650")</div>
+                            <div class="h4 mb-0">@(report.DiemTinDung?.ToString() ?? "Chưa có")</div>
                         </div>
                         <div class="col-6">
                             <div class="small text-secondary">Xếp hạng</div>
-                            <div class="h4 mb-0">@(report.XepHangRuiRo ?? "BBB")</div>
+                            <div class="h4 mb-0">@(report.XepHangRuiRo ?? "Chưa có")</div>
                         </div>
                         <div class="col-6">
                             <div class="small text-secondary">Số lần trả trễ</div>
@@ -143,6 +164,13 @@
                         </div>
                         <div class="col-6">
                             <div class="small text-secondary">Nhóm nợ cao nhất</div>
+                            @if (Model.Loan.LoaiKhachHang != "business")
+                            {
+                                <div class="small text-secondary mt-2">Nghề nghiệp</div>
+                                <div class="fw-semibold">@(string.IsNullOrWhiteSpace(report.NgheNghiep) ? "-" : report.NgheNghiep)</div>
+                                <div class="small text-secondary mt-2">Thu nhập tháng</div>
+                                <div class="fw-semibold">@(report.ThuNhapHangThang.HasValue ? Vnd(report.ThuNhapHangThang.Value) : "-")</div>
+                            }
                             <div class="fw-semibold">Nhom @report.NhomNoCaoNhat</div>
                         </div>
                         <div class="col-6">
@@ -158,7 +186,7 @@
             </div>
 
             <div class="col-lg-4">
-                <div class="soft-panel p-3 h-100">
+                <div class="soft-panel p-3 loan-appraisal-panel">
                     <div class="fw-semibold mb-2">III. Nhu cầu vay và tài sản bảo đảm</div>
                     <div class="small text-secondary">Mục đích vay</div>
                     <div class="fw-semibold mb-2">@Model.Loan.MucDichVay</div>
@@ -166,18 +194,51 @@
                     <div class="fw-semibold mb-2">@Vnd(report.SoTienYeuCau)</div>
                     <div class="small text-secondary">Tổng giá trị TSĐB</div>
                     <div class="fw-semibold mb-2">@Vnd(report.TongGiaTriDamBao)</div>
+                    <div class="small text-secondary">Hạn mức tối đa đã cấp</div>
+                    <div class="fw-semibold mb-2">@(report.HanMucToiDa.HasValue ? Vnd(report.HanMucToiDa.Value) : "Chưa cấp")</div>
+                    @if (!report.HanMucToiDa.HasValue)
+                    {
+                        <div class="loan-limit-note mb-2">
+                            Chưa có hạn mức tín dụng riêng cho khách hàng này; hồ sơ đang xét theo tài sản bảo đảm và LTV.
+                        </div>
+                    }
+                    <div class="small text-secondary">Cấp/Cập nhật hạn mức tối đa</div>
+                    <form asp-controller="Customer" asp-action="UpdateCreditLimit" asp-route-id="@report.MaKh" method="post" class="loan-credit-limit-form mb-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="returnUrl" value="@Context.Request.Path@Context.Request.QueryString" />
+                        <div class="input-group input-group-sm">
+                            <input id="loanCreditLimit"
+                                   name="hanMucToiDa"
+                                   class="form-control"
+                                   inputmode="numeric"
+                                   value="@(TempData["CreditLimitInput"] as string ?? report.HanMucToiDa?.ToString("N0"))"
+                                   placeholder="Ví dụ: 100.000.000" />
+                            <button class="btn btn-outline-primary" type="submit">
+                                <i class="bi bi-check2"></i>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="small text-secondary">Hạn mức đã sử dụng</div>
+                    <div class="fw-semibold mb-2">@(report.HanMucDaSuDung.HasValue ? Vnd(report.HanMucDaSuDung.Value) : "-")</div>
+                    <div class="small text-secondary">Hạn mức còn lại trước khi xét đơn</div>
+                    <div class="fw-semibold mb-2">@(report.HanMucConLai.HasValue ? Vnd(report.HanMucConLai.Value) : "-")</div>
                     <div class="small text-secondary">Hạn mức gợi ý theo LTV</div>
                     <div class="fw-semibold mb-2">@Vnd(report.HanMucGoiY)</div>
+                    <div class="small text-secondary">Số tiền có thể vay thêm</div>
+                    <div class="fw-semibold mb-2">@(report.HanMucChoVayKhaDung.HasValue ? Vnd(report.HanMucChoVayKhaDung.Value) : "-")</div>
                     <div class="small text-secondary">LTV yêu cầu / TSĐB</div>
                     <div class="fw-semibold mb-2">@Percent(report.TyLeLtv)</div>
-                    <span class="status-chip @(report.DuDieuKienDamBao ? "status-chip-success" : "status-chip-warning")">Đảm bảo nợ vay: @YesNo(report.DuDieuKienDamBao)</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="status-chip @(report.DuDieuKienDamBao ? "status-chip-success" : "status-chip-warning")">Đảm bảo nợ vay: @YesNo(report.DuDieuKienDamBao)</span>
+                        <span class="status-chip @(report.DuDieuKienHanMuc ? "status-chip-success" : "status-chip-warning")">Có thể vay thêm: @YesNo(report.DuDieuKienHanMuc)</span>
+                    </div>
                 </div>
             </div>
         </div>
 
         @if (Model.TaiSanDamBao.Count > 0)
         {
-            <div class="table-responsive mt-3">
+            <div class="table-responsive mt-2">
                 <table class="table table-sm align-middle mb-0">
                     <thead>
                         <tr>
@@ -207,9 +268,9 @@
         }
     </div>
 
-    <div class="row g-3 mt-1">
+    <div class="row g-2 mt-2">
         <div class="col-lg-7">
-            <div class="card p-3">
+            <div class="card p-3 loan-work-card">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                     <div class="fw-semibold">Tài sản đảm bảo</div>
                 </div>
@@ -223,29 +284,29 @@
                     <div class="alert alert-success mb-3">@TempData["CollateralSuccess"]</div>
                 }
 
-                <form asp-action="AddCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="border rounded-3 p-3 mb-3">
+                <form asp-action="AddCollateral" asp-route-id="@Model.Loan.MaDon" method="post" class="border rounded-3 p-2 mb-2 collateral-create-form">
                     @Html.AntiForgeryToken()
                     <div class="row g-2">
-                        <div class="col-md-4">
+                        <div class="col-12 col-md-6 col-xl-4">
                             <label class="form-label small text-secondary mb-1">Loại tài sản</label>
                             <input name="LoaiTaiSan" class="form-control form-control-sm" />
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-12 col-md-6 col-xl-3">
                             <label class="form-label small text-secondary mb-1">Giá trị khai báo</label>
                             <input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" />
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-6 col-md-4 col-xl-2">
                             <label class="form-label small text-secondary mb-1">Tỷ lệ LTV</label>
                             <input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" />
                         </div>
-                        <div class="col-md-3 d-flex align-items-end">
+                        <div class="col-6 col-md-8 col-xl-3 d-flex align-items-end">
                             <button class="btn btn-sm btn-primary w-100" type="submit">Thêm tài sản</button>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12 col-lg-6">
                             <label class="form-label small text-secondary mb-1">Giấy tờ pháp lý</label>
                             <input name="GiayToPhapLy" class="form-control form-control-sm" />
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12 col-lg-6">
                             <label class="form-label small text-secondary mb-1">Mô tả</label>
                             <input name="MoTa" class="form-control form-control-sm" />
                         </div>
@@ -258,8 +319,8 @@
                 }
                 else
                 {
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
+                    <div class="table-responsive collateral-table-wrap">
+                        <table class="table table-sm align-middle mb-0 collateral-table">
                             <thead>
                                 <tr class="text-secondary small">
                                     <th>Mã</th>
@@ -268,7 +329,7 @@
                                     <th class="text-end">Định giá</th>
                                     <th class="text-center">LTV</th>
                                     <th class="text-center">Trạng thái</th>
-                                    <th class="text-end">Thao tác</th>
+                                    <th class="text-end collateral-action-heading">Thao tác</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -286,8 +347,8 @@
                                         <td class="text-end">@Vnd(ts.GiaTriKhaiBao)</td>
                                         <td class="text-end">@(ts.GiaTriDinhGia.HasValue ? Vnd(ts.GiaTriDinhGia.Value) : "-")</td>
                                         <td class="text-center">@($"{ts.TyLeLtv * 100:0.#}%")</td>
-                                        <td class="text-center">
-                                            <span class="badge text-bg-light">@ts.TrangThai</span>
+                                        <td class="text-center collateral-status-cell">
+                                            <span class="badge text-bg-light collateral-status-badge">@ts.TrangThai</span>
                                         </td>
                                         <td class="text-end">
                                             <div class="collateral-actions">
@@ -361,13 +422,13 @@
         </div>
 
         <div class="col-lg-5">
-            <div class="card p-3">
+            <div class="card p-3 loan-work-card">
                 <div class="fw-semibold mb-2">Phê duyệt (Tạo đơn → Kiểm tra → Phê duyệt)</div>
 
                 <div class="d-flex flex-column gap-2">
                     @foreach (var step in Model.PheDuyet.OrderBy(x => x.CapPheDuyet))
                     {
-                        <div class="border rounded-3 p-3">
+                        <div class="border rounded-3 p-3 loan-approval-step">
                             <div class="d-flex align-items-start justify-content-between gap-2">
                                 <div>
                                     <div class="fw-semibold">@step.CapText</div>
@@ -415,12 +476,188 @@
 </div>
 
 <style>
-    .collateral-actions {
+    .loan-detail-page {
+        --loan-detail-gap: .65rem;
+    }
+
+    .loan-detail-page h2 {
+        font-size: 1.35rem;
+    }
+
+    .loan-summary-card,
+    .loan-appraisal-card,
+    .loan-work-card {
+        padding: .85rem !important;
+    }
+
+    .loan-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: .5rem;
+        align-items: stretch;
+    }
+
+    .loan-summary-item {
+        min-height: 58px;
+        padding: .55rem .65rem;
+        border: 1px solid #e2eaf3;
+        border-radius: 8px;
+        background: #fbfdff;
+    }
+
+    .loan-summary-item-wide {
+        grid-column: span 2;
+    }
+
+    .loan-summary-card .small,
+    .loan-appraisal-card .small,
+    .loan-work-card .small {
+        line-height: 1.25;
+    }
+
+    .loan-summary-card .fw-semibold,
+    .loan-appraisal-panel .fw-semibold {
+        line-height: 1.3;
+        word-break: break-word;
+    }
+
+    .loan-limit-note {
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        background: #fffbeb;
+        color: #92400e;
+        font-size: .82rem;
+        line-height: 1.35;
+        padding: .5rem .6rem;
+    }
+
+    .loan-appraisal-panel {
+        padding: .75rem !important;
+    }
+
+    .loan-appraisal-panel .mb-2 {
+        margin-bottom: .35rem !important;
+    }
+
+    .loan-appraisal-card .h4 {
+        font-size: 1.25rem;
+    }
+
+    .loan-detail-page .section-card-title {
+        margin-bottom: .15rem;
+    }
+
+    .loan-detail-page .table > :not(caption) > * > * {
+        padding-top: .42rem;
+        padding-bottom: .42rem;
+    }
+
+    .loan-work-card .form-label {
+        margin-bottom: .2rem;
+    }
+
+    .collateral-create-form {
+        background: #fbfdff;
+    }
+
+    .collateral-create-form .btn {
+        min-height: 32px;
+        white-space: nowrap;
+    }
+
+    .collateral-table-wrap {
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .collateral-table {
+        min-width: 820px;
+        table-layout: fixed;
+    }
+
+    .collateral-table th:nth-child(1),
+    .collateral-table td:nth-child(1) {
+        width: 84px;
+    }
+
+    .collateral-table th:nth-child(2),
+    .collateral-table td:nth-child(2) {
+        width: 170px;
+    }
+
+    .collateral-table th:nth-child(3),
+    .collateral-table td:nth-child(3),
+    .collateral-table th:nth-child(4),
+    .collateral-table td:nth-child(4) {
+        width: 120px;
+    }
+
+    .collateral-table th:nth-child(5),
+    .collateral-table td:nth-child(5) {
+        width: 58px;
+    }
+
+    .collateral-table th:nth-child(6),
+    .collateral-table td:nth-child(6) {
+        width: 132px;
+    }
+
+    .collateral-table th:nth-child(7),
+    .collateral-table td:nth-child(7) {
+        width: 220px;
+    }
+
+    .collateral-table td {
+        vertical-align: middle;
+        overflow-wrap: anywhere;
+    }
+
+    .collateral-action-heading {
+        min-width: 220px;
+    }
+
+    .collateral-status-cell {
+        padding-right: .85rem !important;
+    }
+
+    .collateral-status-badge {
         display: inline-flex;
+        max-width: 112px;
+        white-space: normal;
+        line-height: 1.2;
+        text-align: center;
+    }
+
+    .loan-approval-step {
+        padding: .65rem !important;
+    }
+
+    .loan-approval-step .form-control-sm {
+        min-height: 32px;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .loan-summary-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .loan-summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .loan-summary-item-wide {
+            grid-column: span 1;
+        }
+    }
+
+    .collateral-actions {
+        display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: .4rem;
-        flex-wrap: wrap;
+        gap: .55rem;
+        flex-wrap: nowrap;
+        min-width: 208px;
     }
 
     .collateral-valuation-form,
@@ -428,11 +665,12 @@
         display: inline-flex;
         align-items: center;
         justify-content: flex-end;
-        gap: .35rem;
+        gap: .45rem;
     }
 
     .collateral-valuation-input {
-        width: 112px;
+        width: 128px;
+        min-width: 128px;
     }
 
     .collateral-icon-btn {

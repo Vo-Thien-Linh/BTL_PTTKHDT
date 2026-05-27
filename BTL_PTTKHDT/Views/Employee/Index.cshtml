@@ -1,11 +1,22 @@
 @model IEnumerable<BTL_PTTKHDT.Models.NhanVien>
+@{
+    string statusValue = (ViewBag.Status as string ?? string.Empty).Trim().ToLowerInvariant();
+    bool isActiveStatus = statusValue is "active" or "hoatdong";
+    bool isInactiveStatus = statusValue is "inactive" or "nghiviec";
+    string currentEmployeeId = User.FindFirst("MaNV")?.Value ?? string.Empty;
+}
 @{ ViewData["Title"] = "Quản lý Nhân sự"; }
 <div class='container-fluid'>
     <div class='d-flex justify-content-between align-items-center mb-4'>
         <h2>Quản lý Nhân sự</h2>
-        <a asp-action='Create' class='btn btn-primary'>
-            <i class='bi bi-plus-lg me-1'></i>+ Thêm nhân viên
-        </a>
+        <div class='d-flex gap-2'>
+            <a asp-action='Permissions' class='btn btn-outline-primary'>
+                <i class='bi bi-shield-lock me-1'></i> Phân quyền
+            </a>
+            <a asp-action='Create' class='btn btn-primary'>
+                <i class='bi bi-plus-lg me-1'></i>+ Thêm nhân viên
+            </a>
+        </div>
     </div>
     @if (TempData["EmployeeSuccess"] != null)
     {
@@ -21,11 +32,19 @@
     }
     <div class='card mb-3'>
         <div class='card-body'>
-            <form method='get' class='d-flex gap-2' style='max-width:400px'>
+            <form method='get' class='employee-filter-form' data-auto-filter>
                 <input type='text' name='q' value='@ViewBag.Query' class='form-control' placeholder='Tìm kiếm theo mã, họ tên, SĐT...' />
-                <button class='btn btn-outline-secondary' type='submit'>
-                    <i class='bi bi-search'></i> Tìm
-                </button>
+                <div class='employee-filter-status'>
+                    <div class='input-group'>
+                        <span class='input-group-text bg-white'><i class='bi bi-toggle-on'></i></span>
+                        <select name='status' class='form-select'>
+                            <option value='' selected='@(!isActiveStatus && !isInactiveStatus)'>Tất cả trạng thái</option>
+                            <option value='active' selected='@isActiveStatus'>Đang hoạt động</option>
+                            <option value='inactive' selected='@isInactiveStatus'>Nghỉ việc</option>
+                        </select>
+                    </div>
+                </div>
+                <a class='btn btn-light' href='@Url.Action("Index")'>Xóa lọc</a>
             </form>
         </div>
     </div>
@@ -46,7 +65,7 @@
                         <div class='col-12 col-sm-6 col-lg-4 col-xl-3'>
                             <div class='card h-100 border-0 shadow-sm hover-card'
                                  style='cursor: pointer;'
-                                 onclick="window.location='@Url.Action("Edit", new { id = item.MaNv })'">
+                                 onclick="window.location='@Url.Action("Details", new { id = item.MaNv })'">
                                 <!-- Avatar Section -->
                                 <div class='profile-card-head position-relative'>
                                     <div class='profile-card-cover'></div>
@@ -103,7 +122,7 @@
                                         }
                                         <div class='info-row'>
                                             <span class='info-label'><i class='bi bi-calendar3 me-1'></i>Ngày sinh</span>
-                                            <span class='info-value'>@item.NgaySinh.ToString("dd/MM/yyyy")</span>
+                                            <span class='info-value'>@(item.NgaySinh == default ? "Chưa có" : item.NgaySinh.ToString("dd/MM/yyyy"))</span>
                                         </div>
                                         @if (!string.IsNullOrWhiteSpace(item.GioiTinh))
                                         {
@@ -131,12 +150,23 @@
                                         <span>Sửa</span>
                                     </a>
                                     <div class='action-divider'></div>
-                                    <a asp-action='Delete' asp-route-id='@item.MaNv'
-                                       class='action-btn action-btn-delete'
-                                       title='Xóa nhân viên'>
-                                        <i class='bi bi-trash3'></i>
-                                        <span>Xóa</span>
-                                    </a>
+                                    @if (string.Equals(currentEmployeeId, item.MaNv, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <span class='action-btn action-btn-disabled'
+                                              title='Không thể xóa tài khoản đang đăng nhập'>
+                                            <i class='bi bi-shield-lock'></i>
+                                            <span>Đang dùng</span>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <a asp-action='Delete' asp-route-id='@item.MaNv'
+                                           class='action-btn action-btn-delete'
+                                           title='Xóa nhân viên'>
+                                            <i class='bi bi-trash3'></i>
+                                            <span>Xóa</span>
+                                        </a>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -180,11 +210,11 @@
     .profile-avatar-wrap {
         position: absolute;
         left: 18px;
-        bottom: -28px;
-        width: 84px;
-        height: 84px;
+        bottom: -32px;
+        width: 96px;
+        height: 96px;
         border-radius: 999px;
-        padding: 4px;
+        padding: 3px;
         background: #fff;
         border: 1px solid #e5e7eb;
         box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
@@ -198,6 +228,7 @@
         align-items: center;
         justify-content: center;
         object-fit: cover;
+        object-position: center 25%;
     }
     .profile-avatar-placeholder {
         background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 52%, #e0f2fe 100%);
@@ -205,7 +236,7 @@
         font-size: 2.25rem;
     }
     .profile-card-body {
-        padding-top: 2.25rem;
+        padding-top: 2.65rem;
     }
 
     .avatar-placeholder {
@@ -288,6 +319,11 @@
     .action-btn-edit:hover { background: #eff6ff; color: #1d4ed8; }
     .action-btn-delete { color: #ef4444; }
     .action-btn-delete:hover { background: #fef2f2; color: #b91c1c; }
+    .action-btn-disabled {
+        color: #64748b;
+        cursor: not-allowed;
+        background: #f1f5f9;
+    }
     .action-divider {
         width: 1px;
         background: #e2e8f0;

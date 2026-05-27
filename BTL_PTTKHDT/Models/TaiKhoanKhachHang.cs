@@ -1,13 +1,10 @@
-using System;
-using System.Collections.Generic;
-
 namespace BTL_PTTKHDT.Models;
 
-public partial class TaiKhoanNhanVien
+public partial class TaiKhoanKhachHang
 {
-    public string MaTaiKhoan { get; set; } = null!;
+    public string MaTaiKhoanKh { get; set; } = null!;
 
-    public string MaNv { get; set; } = null!;
+    public string MaKh { get; set; } = null!;
 
     public string TenDangNhap { get; set; } = null!;
 
@@ -23,5 +20,5 @@ public partial class TaiKhoanNhanVien
 
     public DateTime NgayCapNhat { get; set; }
 
-    public virtual NhanVien MaNvNavigation { get; set; } = null!;
+    public virtual KhachHang MaKhNavigation { get; set; } = null!;
 }

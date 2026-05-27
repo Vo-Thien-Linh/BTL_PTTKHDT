@@ -35,3 +35,11 @@ publish/
 # Resharper
 _ReSharper*/
 *.DotSettings.user
+
+# Upload user
+BTL_PTTKHDT/wwwroot/uploads/
+
+# Artifacts
+/BTL_PTTKHDT/wwwroot/uploads/
+/BTL_PTTKHDT/artifacts/
+/artifacts/

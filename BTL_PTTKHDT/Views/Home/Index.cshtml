@@ -4,6 +4,26 @@
     ViewData["Title"] = "Bảng điều khiển";
 }
 
+<section class="dashboard-spotlight mb-3">
+    <div class="dashboard-spotlight-icon" aria-hidden="true">
+        <lord-icon
+            src="https://cdn.lordicon.com/lewtedlh.json"
+            trigger="loop"
+            delay="1800"
+            stroke="light"
+            colors="primary:#0f766e,secondary:#ca8a04">
+        </lord-icon>
+    </div>
+    <div class="dashboard-spotlight-copy">
+        <div class="dashboard-spotlight-kicker">Tổng quan tín dụng</div>
+        <h1 class="dashboard-spotlight-title">Theo dõi giải ngân, thu nợ và rủi ro trong một nhịp nhìn.</h1>
+    </div>
+    <div class="dashboard-spotlight-pulse">
+        <span class="dashboard-spotlight-dot"></span>
+        Dữ liệu vận hành
+    </div>
+</section>
+
 <div class="row g-3 mb-3">
     @foreach (var kpi in Model.Kpis)
     {
@@ -152,7 +172,7 @@
                                     <span class="badge rounded-pill text-bg-@item.StatusKind">@item.StatusText</span>
                                     <span class="fw-semibold">@item.Count.ToString("N0")</span>
                                 </div>
-                                <div class="text-secondary small mt-1">@item.OutstandingText</div>
+                                <div class="text-secondary small mt-1">Dư nợ còn lại: @item.OutstandingText</div>
                             </div>
                         }
                     </div>

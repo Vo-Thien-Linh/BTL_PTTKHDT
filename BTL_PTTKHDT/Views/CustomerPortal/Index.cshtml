@@ -1,0 +1,366 @@
+@model CustomerPortalDashboardViewModel
+@{
+    ViewData["Title"] = "Cổng khách hàng";
+    string Vnd(decimal? amount) => amount.HasValue
+        ? amount.Value.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) + " VNĐ"
+        : "Chưa có";
+    string DateText(DateOnly? date) => date.HasValue ? date.Value.ToString("dd/MM/yyyy") : "Chưa có";
+    string Rate(double? value) => value.HasValue ? value.Value.ToString("0.##") + "%" : "Chưa có";
+}
+
+<div class="container-fluid customer-portal">
+    <div class="portal-hero mb-3">
+        <div>
+            <div class="text-secondary small">Xin chào</div>
+            <h2 class="mb-1">@Model.Profile.HoTen</h2>
+            <div class="text-secondary">Mã khách hàng: <span class="fw-semibold">@Model.Profile.MaKh</span></div>
+        </div>
+        <div class="text-end">
+            <div class="small text-secondary">Trạng thái hồ sơ</div>
+            <span class="badge text-bg-success">@Model.Profile.TrangThai</span>
+        </div>
+    </div>
+
+    @if (Model.DebtStatus.CoCanhBaoQuaHan)
+    {
+        <div class="alert alert-warning">
+            Bạn có @Model.DebtStatus.SoKyTreHan kỳ trả nợ đang trễ hạn. Vui lòng liên hệ ngân hàng để được hỗ trợ.
+        </div>
+    }
+
+    <ul class="nav portal-tabs d-none mb-3" id="customerPortalTabs" role="tablist">
+        <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-overview" type="button">Tổng quan</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-profile" type="button">Thông tin cá nhân</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-applications" type="button">Hồ sơ vay</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-limit" type="button">Hạn mức</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-loans" type="button">Khoản vay</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-schedule" type="button">Lịch trả nợ</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-payments" type="button">Thanh toán</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-overview">
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="metric-card"><div class="metric-label">Tổng dư nợ</div><div class="metric-value">@Vnd(Model.DebtStatus.TongDuNoHienTai)</div></div></div>
+                <div class="col-md-3"><div class="metric-card"><div class="metric-label">Có thể vay</div><div class="metric-value">@Vnd(Model.CreditLimit.SoTienCoTheVay)</div></div></div>
+                <div class="col-md-3"><div class="metric-card"><div class="metric-label">Kỳ còn phải trả</div><div class="metric-value">@Model.DebtStatus.SoKyConPhaiTra</div></div></div>
+                <div class="col-md-3"><div class="metric-card"><div class="metric-label">Nhóm nợ</div><div class="metric-value">@Model.DebtStatus.NhomNoCaoNhat</div></div></div>
+            </div>
+            <section class="portal-section">
+                <h5>Tình hình nợ</h5>
+                <dl class="info-list compact">
+                    <dt>Tổng dư nợ hiện tại</dt><dd>@Vnd(Model.DebtStatus.TongDuNoHienTai)</dd>
+                    <dt>Số kỳ còn phải trả</dt><dd>@Model.DebtStatus.SoKyConPhaiTra</dd>
+                    <dt>Số kỳ trễ hạn</dt><dd>@Model.DebtStatus.SoKyTreHan</dd>
+                    <dt>Nhóm nợ cao nhất</dt><dd>@Model.DebtStatus.NhomNoCaoNhat</dd>
+                    <dt>Cảnh báo quá hạn</dt><dd>@(Model.DebtStatus.CoCanhBaoQuaHan ? "Có" : "Không")</dd>
+                </dl>
+            </section>
+        </div>
+
+        <div class="tab-pane fade" id="tab-profile">
+            <section class="portal-section">
+                <h5>Thông tin cá nhân</h5>
+                <dl class="info-list">
+                    <dt>Họ tên</dt><dd>@Model.Profile.HoTen</dd>
+                    <dt>Số điện thoại</dt><dd>@Model.Profile.SoDienThoai</dd>
+                    <dt>Email</dt><dd>@(Model.Profile.Email ?? "Chưa cập nhật")</dd>
+                    <dt>Địa chỉ</dt><dd>@(Model.Profile.DiaChi ?? "Chưa cập nhật")</dd>
+                    <dt>CCCD / MST</dt><dd>@Model.Profile.SoGiayTo</dd>
+                    <dt>Loại khách hàng</dt><dd>@Model.Profile.LoaiKhachHang</dd>
+                    <dt>Trạng thái</dt><dd>@Model.Profile.TrangThai</dd>
+                </dl>
+            </section>
+        </div>
+
+        <div class="tab-pane fade" id="tab-applications">
+            <section class="portal-section">
+                <h5>Hồ sơ vay và kết quả duyệt</h5>
+                @if (Model.Applications.Count == 0)
+                {
+                    <div class="empty-state">Chưa có hồ sơ vay nào.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Mã đơn</th><th>Mục đích</th><th class="text-end">Yêu cầu</th><th>Kỳ hạn</th><th>Lãi suất</th><th>Trạng thái</th><th>Kết quả</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.Applications)
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">@item.MaDon</td>
+                                        <td>@item.MucDichVay</td>
+                                        <td class="text-end">@Vnd(item.SoTienYeuCau)</td>
+                                        <td>@item.KyHanDeNghi tháng</td>
+                                        <td>@Rate(item.LaiSuatDeNghi)</td>
+                                        <td><span class="badge text-bg-light">@item.TrangThaiDon</span></td>
+                                        <td>
+                                            @if (item.SoTienDuocDuyet.HasValue)
+                                            {
+                                                <div>@Vnd(item.SoTienDuocDuyet)</div>
+                                                <div class="text-secondary small">@item.KyHanDuocDuyet tháng, @Rate(item.LaiSuatApDung), giải ngân @DateText(item.NgayGiaiNgan)</div>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(item.LyDoTuChoi))
+                                            {
+                                                <span class="text-danger">@item.LyDoTuChoi</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-secondary">Chưa có kết quả</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <div class="tab-pane fade" id="tab-limit">
+            <section class="portal-section">
+                <h5>Hạn mức và số tiền có thể vay</h5>
+                <dl class="info-list">
+                    <dt>Trạng thái hạn mức</dt><dd>@(Model.CreditLimit.CoHanMucTinDung ? "Đã cấp hạn mức tín dụng" : "Chưa cấp hạn mức tín dụng")</dd>
+                    <dt>Hạn mức tối đa</dt><dd>@Vnd(Model.CreditLimit.HanMucToiDa)</dd>
+                    <dt>Đã sử dụng</dt><dd>@Vnd(Model.CreditLimit.HanMucDaSuDung)</dd>
+                    <dt>Còn lại</dt><dd>@Vnd(Model.CreditLimit.HanMucConLai)</dd>
+                    <dt>Gợi ý theo tài sản</dt><dd>@Vnd(Model.CreditLimit.HanMucGoiYTheoTaiSan)</dd>
+                    <dt>Số tiền có thể vay</dt><dd>@Vnd(Model.CreditLimit.SoTienCoTheVay)</dd>
+                    <dt>Tổng tài sản bảo đảm</dt><dd>@Vnd(Model.CreditLimit.TongGiaTriTaiSanBaoDam)</dd>
+                    <dt>LTV tổng hợp</dt><dd>@(Model.CreditLimit.TyLeLtvTongHop <= 0 ? "Chưa có" : (Model.CreditLimit.TyLeLtvTongHop * 100m).ToString("0.##") + "%")</dd>
+                </dl>
+            </section>
+        </div>
+
+        <div class="tab-pane fade" id="tab-loans">
+            <section class="portal-section">
+                <h5>Khoản vay hiện tại</h5>
+                @if (Model.ActiveLoans.Count == 0)
+                {
+                    <div class="empty-state">Chưa có khoản vay nào.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Mã vay</th><th class="text-end">Số tiền vay</th><th class="text-end">Dư nợ gốc</th><th>Lãi suất</th><th>Kỳ hạn</th><th>Giải ngân</th><th>Đáo hạn</th><th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var loan in Model.ActiveLoans)
+                                {
+                                    <tr>
+                                        <td class="fw-semibold">@loan.MaVay</td>
+                                        <td class="text-end">@Vnd(loan.SoTienVay)</td>
+                                        <td class="text-end">@Vnd(loan.DuNoGoc)</td>
+                                        <td>@Rate(loan.LaiSuat)</td>
+                                        <td>@loan.KyHan tháng</td>
+                                        <td>@DateText(loan.NgayGiaiNgan)</td>
+                                        <td>@DateText(loan.NgayDaoHan)</td>
+                                        <td><span class="badge text-bg-light">@loan.TrangThai</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <div class="tab-pane fade" id="tab-schedule">
+            <section class="portal-section">
+                <h5>Lịch trả nợ</h5>
+                @if (Model.RepaymentSchedule.Count == 0)
+                {
+                    <div class="empty-state">Chưa có lịch trả nợ.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Mã vay</th><th>Kỳ</th><th>Ngày phải trả</th><th class="text-end">Gốc</th><th class="text-end">Lãi</th><th class="text-end">Tổng</th><th class="text-end">Đã trả</th><th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.RepaymentSchedule)
+                                {
+                                    <tr>
+                                        <td>@row.MaVay</td>
+                                        <td>@row.KyThu</td>
+                                        <td>@DateText(row.NgayPhaiTra)</td>
+                                        <td class="text-end">@Vnd(row.SoTienGoc)</td>
+                                        <td class="text-end">@Vnd(row.SoTienLai)</td>
+                                        <td class="text-end">@Vnd(row.TongPhaiTra)</td>
+                                        <td class="text-end">@Vnd(row.SoTienDaThanhToan)</td>
+                                        <td><span class="badge text-bg-light">@row.TrangThai</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <div class="tab-pane fade" id="tab-payments">
+            <section class="portal-section">
+                <h5>Lịch sử thanh toán</h5>
+                @if (Model.Payments.Count == 0)
+                {
+                    <div class="empty-state">Chưa có giao dịch thanh toán.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Ngày</th><th class="text-end">Số tiền</th><th>Chi tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in Model.Payments)
+                                {
+                                    <tr>
+                                        <td>@payment.NgayThanhToan.ToString("dd/MM/yyyy")</td>
+                                        <td class="text-end">@Vnd(payment.SoTienThanhToan)</td>
+                                        <td>
+                                            <div>Gốc: @Vnd(payment.SoTienGocTra), lãi: @Vnd(payment.SoTienLaiTra)</div>
+                                            <div class="text-secondary small">Phạt: @Vnd(payment.SoTienPhatTra), @payment.HinhThuc</div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        </div>
+    </div>
+</div>
+
+<style>
+    .customer-portal .portal-hero,
+    .customer-portal .portal-section,
+    .customer-portal .metric-card,
+    .customer-portal .portal-tabs {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+    }
+
+    .customer-portal .portal-hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+    }
+
+    .customer-portal .portal-tabs {
+        display: flex;
+        gap: 6px;
+        padding: 8px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .customer-portal .portal-tabs .nav-link {
+        white-space: nowrap;
+        color: #334155;
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-weight: 600;
+    }
+
+    .customer-portal .portal-tabs .nav-link.active {
+        color: #fff;
+        background: #0f766e;
+    }
+
+    .customer-portal .portal-section {
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .customer-portal .portal-section h5 { margin-bottom: 14px; }
+    .customer-portal .metric-card { padding: 16px; min-height: 92px; }
+    .customer-portal .metric-label { color: #64748b; font-size: .85rem; margin-bottom: 8px; }
+    .customer-portal .metric-value { font-size: 1.25rem; font-weight: 700; }
+
+    .customer-portal .info-list {
+        display: grid;
+        grid-template-columns: 190px 1fr;
+        gap: 10px 14px;
+        margin-bottom: 0;
+    }
+
+    .customer-portal .info-list.compact { grid-template-columns: 220px 1fr; }
+    .customer-portal .info-list dt { color: #64748b; font-weight: 500; }
+    .customer-portal .info-list dd { margin-bottom: 0; font-weight: 600; }
+
+    .customer-portal .empty-state {
+        color: #64748b;
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 18px;
+        text-align: center;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        (() => {
+            const tabIds = new Set([
+                'tab-overview',
+                'tab-profile',
+                'tab-applications',
+                'tab-limit',
+                'tab-loans',
+                'tab-schedule',
+                'tab-payments'
+            ]);
+
+            function activateFromHash() {
+                const id = (window.location.hash || '#tab-overview').slice(1);
+                if (!tabIds.has(id)) return;
+
+                const button = document.querySelector(`[data-bs-target="#${id}"]`);
+                if (button) bootstrap.Tab.getOrCreateInstance(button).show();
+
+                document.querySelectorAll('.customer-tab-link').forEach(link => {
+                    const target = new URL(link.href, window.location.origin).hash.slice(1);
+                    link.classList.toggle('active', target === id);
+                });
+
+            }
+
+            document.querySelectorAll('.customer-tab-link').forEach(link => {
+                link.addEventListener('click', event => {
+                    const url = new URL(link.href, window.location.origin);
+                    if (url.pathname !== window.location.pathname) return;
+
+                    event.preventDefault();
+                    window.location.hash = url.hash;
+                    activateFromHash();
+                });
+            });
+
+            window.addEventListener('hashchange', activateFromHash);
+            activateFromHash();
+        })();
+    </script>
+}

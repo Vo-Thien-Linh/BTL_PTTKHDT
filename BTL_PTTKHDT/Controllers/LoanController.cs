@@ -1,23 +1,28 @@
 ﻿using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Security;
 using BTL_PTTKHDT.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 
 namespace BTL_PTTKHDT.Controllers;
 
+[PermissionAuthorize(AppPermissions.ViewLoans)]
 public class LoanController : Controller
 {
     private readonly QltdnhContext _db;
     private readonly ICreditScoreService _creditScoreService;
+    private readonly IPermissionService _permissionService;
 
-    public LoanController(QltdnhContext db, ICreditScoreService creditScoreService)
+    public LoanController(QltdnhContext db, ICreditScoreService creditScoreService, IPermissionService permissionService)
     {
         _db = db;
         _creditScoreService = creditScoreService;
+        _permissionService = permissionService;
     }
 
-    private const int PageSize = 10;
+    private const int PageSize = 12;
 
     public async Task<IActionResult> Index(string? q, string? status, string? period, int page = 1, CancellationToken cancellationToken = default)
     {
@@ -80,6 +85,7 @@ public class LoanController : Controller
         return View(vm);
     }
 
+    [PermissionAuthorize(AppPermissions.CreateLoans)]
     public IActionResult Create()
     {
         return View(new LoanCreateViewModel
@@ -90,11 +96,14 @@ public class LoanController : Controller
         });
     }
 
+    [PermissionAuthorize(AppPermissions.CreateLoans)]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(LoanCreateViewModel model, CancellationToken cancellationToken = default)
     {
         var now = DateTime.Now;
+        NormalizeLoanInput(model);
+        ValidateLoanInput(model);
         var actor = await GetDefaultEmployeeIdAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(actor))
         {
@@ -131,6 +140,16 @@ public class LoanController : Controller
                     nameof(LoanCreateViewModel.MaKh),
                     $"Khách hàng đang có khoản vay {activeCustomerLoan.MaVay} chưa tất toán, dư nợ gốc {FormatMoney(activeCustomerLoan.DuNoGoc)}. Chỉ có thể tạo đơn vay mới sau khi khách hàng trả xong khoản vay hiện tại.");
             }
+
+            var openLoanApplication = await GetOpenLoanApplicationAsync(customer.MaKh, exceptLoanApplicationId: null, cancellationToken);
+            if (openLoanApplication != null)
+            {
+                ModelState.AddModelError(
+                    nameof(LoanCreateViewModel.MaKh),
+                    $"Khách hàng đang có hồ sơ vay {openLoanApplication.MaDon} ở trạng thái {openLoanApplication.TrangThaiDon}. Không thể tạo thêm hồ sơ vay mới khi hồ sơ hiện tại chưa kết thúc.");
+            }
+
+            ValidateCustomerCanBorrow(customer, nameof(LoanCreateViewModel.MaKh));
         }
 
         if (!ModelState.IsValid)
@@ -173,6 +192,7 @@ public class LoanController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    [PermissionAuthorize(AppPermissions.EditLoans)]
     public async Task<IActionResult> Edit(string? id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
@@ -202,11 +222,14 @@ public class LoanController : Controller
         return View(model);
     }
 
+    [PermissionAuthorize(AppPermissions.EditLoans)]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(string id, LoanCreateViewModel model, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
+        NormalizeLoanInput(model);
+        ValidateLoanInput(model);
 
         var don = await _db.DonVays.FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
         if (don == null) return NotFound();
@@ -236,6 +259,7 @@ public class LoanController : Controller
             ModelState.Remove(nameof(LoanCreateViewModel.TenKhachHang));
             ModelState.Remove(nameof(LoanCreateViewModel.SoGiayTo));
             ModelState.Remove(nameof(LoanCreateViewModel.LoaiKhachHang));
+            ValidateCustomerCanBorrow(customer, string.Empty);
         }
 
         if (!ModelState.IsValid)
@@ -256,6 +280,33 @@ public class LoanController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [PermissionAuthorize(AppPermissions.EditLoans)]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+        var don = await _db.DonVays
+            .Include(x => x.QuyTrinhPheDuyets)
+            .FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
+        if (don == null) return NotFound();
+
+        var canDelete = await CanDeleteLoanApplicationAsync(don, cancellationToken);
+        if (!canDelete)
+        {
+            TempData["LoanWarning"] = "Hồ sơ đã có duyệt cấp 2/3 hoặc đã sinh khoản vay nên không thể xóa. Hãy giữ lịch sử xử lý của hồ sơ.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        _db.QuyTrinhPheDuyets.RemoveRange(don.QuyTrinhPheDuyets);
+        _db.DonVays.Remove(don);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        TempData["LoanSuccess"] = $"Đã xóa hồ sơ vay {id}.";
+        return RedirectToAction(nameof(Index));
+    }
+
     public async Task<IActionResult> Details(string? id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id)) return NotFound();
@@ -267,6 +318,7 @@ public class LoanController : Controller
         return View(vm);
     }
 
+    [PermissionAuthorize(AppPermissions.ExportAppraisalPdf)]
     [HttpGet]
     public async Task<IActionResult> AppraisalPdf(string id, CancellationToken cancellationToken = default)
     {
@@ -329,8 +381,22 @@ public class LoanController : Controller
             PheDuyet = steps,
             TongGiaTriDamBao = tongGiaTri,
             HanMucGoiY = hanMuc,
-            TyLeLtv = ltv
+            TyLeLtv = ltv,
+            CanDelete = await CanDeleteLoanApplicationAsync(don, cancellationToken)
         };
+    }
+
+    private async Task<bool> CanDeleteLoanApplicationAsync(DonVay don, CancellationToken cancellationToken)
+    {
+        var hasLoan = await _db.KhoanVays
+            .AsNoTracking()
+            .AnyAsync(x => x.MaDon == don.MaDon, cancellationToken);
+        if (hasLoan)
+        {
+            return false;
+        }
+
+        return !don.QuyTrinhPheDuyets.Any(x => x.CapPheDuyet >= 2);
     }
 
     private async Task<LoanAppraisalReportViewModel> BuildAppraisalReportAsync(
@@ -365,6 +431,14 @@ public class LoanController : Controller
         var tongDuNo = activeLoans.Sum(x => x.DuNoGoc);
         var nhomNoCaoNhat = activeLoans.Select(x => x.NhomNo).DefaultIfEmpty((byte)1).Max();
         var coNoQuaHan = activeLoans.Any(x => x.TrangThai == "Quá hạn" || x.NhomNo >= 2);
+        var incomeForReport = latestCredit?.ThuNhapHangThang
+            ?? (MapCustomerTypeKind(customer.LoaiKhachHang) == "business"
+                ? customer.DoanhThuBinhQuanThang
+                : customer.ThuNhapHangThang);
+        var debtToIncomeForReport = latestCredit?.TyLeNoThuNhap
+            ?? (incomeForReport.HasValue && incomeForReport.Value > 0
+                ? (double?)(tongDuNo / incomeForReport.Value)
+                : null);
 
         return new LoanAppraisalReportViewModel
         {
@@ -382,14 +456,17 @@ public class LoanController : Controller
             ChucVuNguoiDaiDien = customer.ChucVuNguoiDaiDien,
             NgayThanhLap = customer.NgayThanhLap,
             LinhVucKinhDoanh = customer.LinhVucKinhDoanh,
+            NgheNghiep = customer.NgheNghiep,
+            NoiLamViec = customer.NoiLamViec,
+            ChucVu = customer.ChucVu,
             DoanhThuBinhQuanThang = customer.DoanhThuBinhQuanThang,
             LoiNhuanBinhQuanThang = customer.LoiNhuanBinhQuanThang,
             SoLaoDong = customer.SoLaoDong,
             DiemTinDung = latestCredit?.DiemTinDung,
             XepHangRuiRo = latestCredit?.XepHangRuiRo,
             SoLanTraTre = latestCredit?.SoLanTraTre ?? 0,
-            ThuNhapHangThang = latestCredit?.ThuNhapHangThang,
-            TyLeNoThuNhap = latestCredit?.TyLeNoThuNhap,
+            ThuNhapHangThang = incomeForReport,
+            TyLeNoThuNhap = debtToIncomeForReport,
             GhiChuTinDung = latestCredit?.GhiChu,
             NgayCapNhatTinDung = latestCredit?.NgayCapNhat,
             NguonCapNhatTinDung = latestCredit?.NguonCapNhat,
@@ -409,6 +486,7 @@ public class LoanController : Controller
         };
     }
 
+    [PermissionAuthorize(AppPermissions.AppraiseCollateral)]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCollateral(string id, LoanCollateralCreateViewModel model, CancellationToken cancellationToken = default)
@@ -478,6 +556,7 @@ public class LoanController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [PermissionAuthorize(AppPermissions.AppraiseCollateral)]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ValuateCollateral(string id, LoanCollateralValuationViewModel model, CancellationToken cancellationToken = default)
@@ -512,6 +591,7 @@ public class LoanController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [PermissionAuthorize(AppPermissions.AppraiseCollateral)]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EditCollateral(string id, CancellationToken cancellationToken = default)
@@ -571,6 +651,7 @@ public class LoanController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [PermissionAuthorize(AppPermissions.AppraiseCollateral)]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteCollateral(string id, string maTaiSanKh, CancellationToken cancellationToken = default)
@@ -668,6 +749,11 @@ public class LoanController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Decide(string id, int cap, string decision, string? note, CancellationToken cancellationToken = default)
     {
+        if (!await CanDecideApprovalLevelAsync(cap, cancellationToken))
+        {
+            return Forbid();
+        }
+
         var don = await _db.DonVays
             .Include(x => x.QuyTrinhPheDuyets)
             .FirstOrDefaultAsync(x => x.MaDon == id, cancellationToken);
@@ -817,7 +903,8 @@ public class LoanController : Controller
     private static string ComputeStageSlug(string trangThaiDonDb, string maker, string checker, string approver)
     {
         if (trangThaiDonDb == "Đã duyệt") return "da-duyet";
-        if (trangThaiDonDb == "Từ chối") return "tu-choi";
+        if (trangThaiDonDb == "Từ chối" || maker == "rejected" || checker == "rejected" || approver == "rejected")
+            return "tu-choi";
         if (trangThaiDonDb == "Đã hủy") return "da-huy";
         if (trangThaiDonDb == "Đang soạn") return "dang-soan";
 
@@ -870,6 +957,59 @@ public class LoanController : Controller
     {
         var s = raw?.Trim().ToLowerInvariant() ?? string.Empty;
         return s.Contains("doanh") ? "business" : "personal";
+    }
+
+    private static void NormalizeLoanInput(LoanCreateViewModel model)
+    {
+        model.MaKh = model.MaKh?.Trim() ?? string.Empty;
+        model.TenKhachHang = model.TenKhachHang?.Trim() ?? string.Empty;
+        model.LoaiKhachHang = model.LoaiKhachHang?.Trim() ?? string.Empty;
+        model.SoGiayTo = model.SoGiayTo?.Trim() ?? string.Empty;
+        model.MucDichVay = model.MucDichVay?.Trim() ?? string.Empty;
+        model.GhiChu = string.IsNullOrWhiteSpace(model.GhiChu) ? null : model.GhiChu.Trim();
+    }
+
+    private void ValidateLoanInput(LoanCreateViewModel model)
+    {
+        if (model.SoTienYeuCau <= 0)
+        {
+            ModelState.AddModelError(nameof(LoanCreateViewModel.SoTienYeuCau), "Số tiền yêu cầu phải lớn hơn 0.");
+        }
+
+        if (model.KyHanDeNghi <= 0)
+        {
+            ModelState.AddModelError(nameof(LoanCreateViewModel.KyHanDeNghi), "Kỳ hạn đề nghị phải lớn hơn 0.");
+        }
+
+        if (!model.LaiSuatDeNghi.HasValue || model.LaiSuatDeNghi.Value <= 0)
+        {
+            ModelState.AddModelError(nameof(LoanCreateViewModel.LaiSuatDeNghi), "Lãi suất đề nghị phải lớn hơn 0.");
+        }
+
+        if (string.IsNullOrWhiteSpace(model.MucDichVay))
+        {
+            ModelState.AddModelError(nameof(LoanCreateViewModel.MucDichVay), "Mục đích vay không được để trống.");
+        }
+    }
+
+    private void ValidateCustomerCanBorrow(KhachHang customer, string fieldName)
+    {
+        if (!customer.IsActive)
+        {
+            ModelState.AddModelError(fieldName, "Khách hàng đang tạm ngưng, không thể tạo hồ sơ vay.");
+        }
+
+        if (customer.NgaySinh == default)
+        {
+            ModelState.AddModelError(fieldName, "Khách hàng chưa có ngày sinh hợp lệ.");
+            return;
+        }
+
+        var minBirthDate = DateOnly.FromDateTime(DateTime.Today).AddYears(-18);
+        if (customer.NgaySinh > minBirthDate)
+        {
+            ModelState.AddModelError(fieldName, "Khách hàng hoặc người đại diện phải đủ 18 tuổi để vay.");
+        }
     }
 
     private static int ParseCodeSuffix(string code, string prefix)
@@ -931,6 +1071,7 @@ public class LoanController : Controller
     }
 
     private sealed record ActiveCustomerLoanInfo(string MaVay, decimal DuNoGoc, string TrangThai);
+    private sealed record OpenLoanApplicationInfo(string MaDon, string TrangThaiDon);
 
     private async Task<ActiveCustomerLoanInfo?> GetActiveCustomerLoanAsync(string maKh, string? exceptLoanApplicationId, CancellationToken cancellationToken)
     {
@@ -944,6 +1085,21 @@ public class LoanController : Controller
                 && x.TrangThai != "Xóa nợ")
             .OrderByDescending(x => x.NgayGiaiNgan)
             .Select(x => new ActiveCustomerLoanInfo(x.MaVay, x.DuNoGoc, x.TrangThai))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private async Task<OpenLoanApplicationInfo?> GetOpenLoanApplicationAsync(string maKh, string? exceptLoanApplicationId, CancellationToken cancellationToken)
+    {
+        return await _db.DonVays
+            .AsNoTracking()
+            .Where(x =>
+                x.MaKh == maKh
+                && (exceptLoanApplicationId == null || x.MaDon != exceptLoanApplicationId)
+                && x.TrangThaiDon != "Từ chối"
+                && x.TrangThaiDon != "Đã hủy"
+                && !_db.KhoanVays.Any(k => k.MaDon == x.MaDon))
+            .OrderByDescending(x => x.NgayTao)
+            .Select(x => new OpenLoanApplicationInfo(x.MaDon, x.TrangThaiDon))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -1006,8 +1162,28 @@ public class LoanController : Controller
 
     private async Task<string?> GetDefaultEmployeeIdAsync(CancellationToken ct)
     {
+        var maNv = User.FindFirst("MaNV")?.Value;
+        if (!string.IsNullOrWhiteSpace(maNv))
+        {
+            return maNv;
+        }
+
         var nv = await _db.NhanViens.AsNoTracking().OrderBy(x => x.MaNv).Select(x => x.MaNv).FirstOrDefaultAsync(ct);
         return string.IsNullOrWhiteSpace(nv) ? null : nv;
+    }
+
+    private async Task<bool> CanDecideApprovalLevelAsync(int cap, CancellationToken ct)
+    {
+        var permission = cap switch
+        {
+            1 => AppPermissions.ApproveLevel1,
+            2 => AppPermissions.ApproveLevel2,
+            3 => AppPermissions.ApproveLevel3,
+            _ => string.Empty
+        };
+
+        return !string.IsNullOrWhiteSpace(permission)
+            && await _permissionService.HasPermissionAsync(User, permission, ct);
     }
 
     // ──────────────────────────────────────────────
@@ -1016,13 +1192,13 @@ public class LoanController : Controller
 
     /// <summary>
     /// Tim kiếm và lọc hồ sơ vay — trả JSON cho AJAX.
-    /// GET /api/loans/search?q=&amp;status=&amp;page=1&amp;pageSize=10
+    /// GET /api/loans/search?q=&amp;status=&amp;page=1&amp;pageSize=12
     /// </summary>
     [HttpGet("/api/loans/search")]
-    public async Task<IActionResult> SearchApi(string? q, string? status, int page = 1, int pageSize = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> SearchApi(string? q, string? status, int page = 1, int pageSize = 12, CancellationToken cancellationToken = default)
     {
         if (page < 1) page = 1;
-        if (pageSize is < 1 or > 50) pageSize = 10;
+        if (pageSize is < 1 or > 50) pageSize = 12;
 
         IQueryable<DonVay> baseQuery = _db.DonVays
             .AsNoTracking()

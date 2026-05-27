@@ -6,6 +6,7 @@ public sealed class CustomerListViewModel
 
     public string? Query { get; init; }
     public string? Type { get; init; }
+    public string? Status { get; init; }
 
     public int Page { get; init; }
     public int PageSize { get; init; }
@@ -37,4 +38,6 @@ public sealed class CustomerRowViewModel
     public string? XepHangRuiRo { get; init; }
 
     public required bool IsActive { get; init; }
+
+    public bool IsLocked { get; init; }
 }

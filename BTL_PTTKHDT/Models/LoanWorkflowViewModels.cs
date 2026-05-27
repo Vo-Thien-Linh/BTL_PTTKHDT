@@ -19,6 +19,7 @@ public sealed class LoanDetailViewModel
     public decimal TongGiaTriDamBao { get; init; }
     public decimal HanMucGoiY { get; init; }
     public decimal TyLeLtv { get; init; }
+    public bool CanDelete { get; init; }
 }
 
 public sealed class LoanAppraisalReportViewModel
@@ -38,6 +39,9 @@ public sealed class LoanAppraisalReportViewModel
     public string? ChucVuNguoiDaiDien { get; init; }
     public DateOnly? NgayThanhLap { get; init; }
     public string? LinhVucKinhDoanh { get; init; }
+    public string? NgheNghiep { get; init; }
+    public string? NoiLamViec { get; init; }
+    public string? ChucVu { get; init; }
     public decimal? DoanhThuBinhQuanThang { get; init; }
     public decimal? LoiNhuanBinhQuanThang { get; init; }
     public int? SoLaoDong { get; init; }
@@ -58,10 +62,14 @@ public sealed class LoanAppraisalReportViewModel
     public bool CoNoXau { get; init; }
 
     public bool DuTuCachVayVon => IsActive;
-    public bool CoKhaNangTaiChinh => (DiemTinDung ?? 650) >= 500 && !CoNoXau;
+    public bool CoKhaNangTaiChinh => DiemTinDung.HasValue && DiemTinDung.Value >= 500 && !CoNoXau;
     public bool MucDichHopPhap => true;
     public bool DuDieuKienDamBao => TongGiaTriDamBao > 0 && HanMucGoiY >= SoTienYeuCau;
-    public bool DeXuatChoVay => DuTuCachVayVon && CoKhaNangTaiChinh && MucDichHopPhap && DuDieuKienDamBao;
+    public decimal? HanMucChoVayKhaDung => HanMucConLai.HasValue && HanMucGoiY > 0
+        ? Math.Min(HanMucConLai.Value, HanMucGoiY)
+        : HanMucConLai ?? (HanMucGoiY > 0 ? HanMucGoiY : null);
+    public bool DuDieuKienHanMuc => HanMucChoVayKhaDung.HasValue && HanMucChoVayKhaDung.Value >= SoTienYeuCau;
+    public bool DeXuatChoVay => DuTuCachVayVon && CoKhaNangTaiChinh && MucDichHopPhap && DuDieuKienDamBao && DuDieuKienHanMuc;
 
     public decimal SoTienYeuCau { get; init; }
     public decimal TongGiaTriDamBao { get; init; }

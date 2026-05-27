@@ -64,6 +64,9 @@ public static class LoanAppraisalPdfService
 
         pdf.Section("III. TÌNH HÌNH TÀI CHÍNH VÀ KHẢ NĂNG TRẢ NỢ");
         pdf.Line("1. Thu nhập / Doanh thu");
+        pdf.Line($"Nghề nghiệp: {Text(report.NgheNghiep)}");
+        pdf.Line($"Nơi làm việc: {Text(report.NoiLamViec)}");
+        pdf.Line($"Chức vụ: {Text(report.ChucVu)}");
         pdf.Line($"Doanh thu bình quân tháng: {Money(report.DoanhThuBinhQuanThang)}");
         pdf.Line($"Lợi nhuận bình quân tháng: {Money(report.LoiNhuanBinhQuanThang)}");
         pdf.Line($"Thu nhập hàng tháng theo lịch sử tín dụng: {Money(report.ThuNhapHangThang)}");
@@ -97,15 +100,14 @@ public static class LoanAppraisalPdfService
         pdf.Line($"Hạn mức đã sử dụng trước đó: {Money(report.HanMucDaSuDung)}");
         pdf.Line($"Hạn mức còn lại trước khi xét đơn: {Money(report.HanMucConLai)}");
         pdf.Line($"Hạn mức gợi ý theo tài sản bảo đảm: {Money(model.HanMucGoiY)}");
-        pdf.Line($"Hạn mức cho vay khả dụng: {Money(AvailableLoanLimit(report, model))}");
+        pdf.Line($"Số tiền có thể vay thêm: {Money(AvailableLoanLimit(report, model))}");
         pdf.Line($"Ngày cập nhật hạn mức: {FormatDate(report.NgayCapNhatHanMuc)}");
         pdf.Space();
-        pdf.Line("Hạn mức đề nghị có phù hợp hạn mức còn lại / tài sản bảo đảm:");
-        bool? amountFitsLimit = report.HanMucConLai.HasValue
-            ? report.HanMucConLai.Value >= model.Loan.SoTienYeuCau
-            : model.HanMucGoiY > 0
-                ? model.HanMucGoiY >= model.Loan.SoTienYeuCau
-                : null;
+        pdf.Line("Số tiền đề nghị có phù hợp hạn mức còn lại / tài sản bảo đảm:");
+        var availableLoanLimit = AvailableLoanLimit(report, model);
+        bool? amountFitsLimit = availableLoanLimit.HasValue
+            ? availableLoanLimit.Value >= model.Loan.SoTienYeuCau
+            : null;
         pdf.Line($"{Check(amountFitsLimit)} Có     {Check(!amountFitsLimit)} Không");
         pdf.Line("Nhận xét hạn mức:");
         pdf.Line(Dots());
@@ -180,7 +182,7 @@ public static class LoanAppraisalPdfService
         pdf.Line(Dots());
         pdf.Line($"{Check(model.Loan.TrangThaiDon == "Đã duyệt")} Chấp thuận cho vay");
         pdf.Line($"Số tiền cho vay: {Money(model.Loan.SoTienYeuCau)}");
-        pdf.Line($"Hạn mức cho vay: {Money(AvailableLoanLimit(report, model))}");
+        pdf.Line($"Số tiền có thể vay thêm: {Money(AvailableLoanLimit(report, model))}");
         pdf.Line($"Lãi suất: {(model.LaiSuatDeNghi.HasValue ? $"{model.LaiSuatDeNghi:0.##}%/năm" : Blank())}");
         pdf.Line($"Thời hạn vay: {model.KyHanDeNghi} tháng");
         pdf.Line("Ngày giải ngân dự kiến: ................................................");

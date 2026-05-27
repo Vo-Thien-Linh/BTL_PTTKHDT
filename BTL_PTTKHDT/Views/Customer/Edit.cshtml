@@ -1,18 +1,21 @@
 @model BTL_PTTKHDT.Models.KhachHang
 @{
-    ViewData["Title"] = "Sua khach hang";
+    ViewData["Title"] = "Sửa khách hàng";
     var credit = ViewData["CreditHistory"] as BTL_PTTKHDT.Models.LichSuTinDung;
-    var creditClass = credit?.DiemTinDung >= 700 ? "text-success" : credit?.DiemTinDung >= 500 ? "text-warning" : "text-danger";
+    var creditClass = credit == null ? "text-secondary" : credit.DiemTinDung >= 700 ? "text-success" : credit.DiemTinDung >= 500 ? "text-warning" : "text-danger";
     var assets = ViewData["CustomerAssets"] as IEnumerable<BTL_PTTKHDT.Models.TaiSanKhachHang>;
     var assetList = assets?.ToList() ?? new List<BTL_PTTKHDT.Models.TaiSanKhachHang>();
     var activePledgedAssetIds = ViewData["ActivePledgedAssetIds"] as HashSet<string> ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var portalAccount = ViewData["CustomerPortalAccount"] as BTL_PTTKHDT.Models.TaiKhoanKhachHang;
+    var maxBirthDate = DateOnly.FromDateTime(DateTime.Today).AddYears(-18).ToString("yyyy-MM-dd");
+    var birthDateValue = Model.NgaySinh.Year < 1900 ? maxBirthDate : Model.NgaySinh.ToString("yyyy-MM-dd");
 }
 
 <div class="container-fluid customer-edit-page">
     <div class="page-hero mb-3">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
-                <h2 class="page-hero-title">Sua khach hang: @Model.HoTen</h2>
+                <h2 class="page-hero-title">Sửa khách hàng: @Model.HoTen</h2>
                 <div class="page-hero-subtitle small">Quản lý hồ sơ, điểm tín dụng và tài sản bảo đảm của khách hàng.</div>
             </div>
             <div class="d-flex align-items-center gap-2">
@@ -22,14 +25,91 @@
         </div>
     </div>
 
+    @if (TempData["CustomerSuccess"] != null)
+    {
+        <div class="alert alert-success">@TempData["CustomerSuccess"]</div>
+    }
+    @if (TempData["CustomerWarning"] != null)
+    {
+        <div class="alert alert-warning">@TempData["CustomerWarning"]</div>
+    }
+    @if (TempData["CustomerError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["CustomerError"]</div>
+    }
+
+    <div class="card section-card p-3 mb-3">
+        <div class="section-card-title mb-3">
+            <i class="bi bi-person-lock"></i>
+            <span>Tài khoản cổng khách hàng</span>
+        </div>
+
+        @if (portalAccount == null)
+        {
+            <form asp-action="CreatePortalAccount" asp-route-id="@Model.MaKh" method="post" class="row g-2 align-items-end">
+                @Html.AntiForgeryToken()
+                <div class="col-md-4">
+                    <label class="form-label">Tên đăng nhập</label>
+                    <input class="form-control" value="@Model.SoDienThoai" readonly />
+                    <div class="form-text">Khách hàng cũng có thể đăng nhập bằng SĐT, CCCD hoặc mã khách hàng.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Mật khẩu ban đầu</label>
+                    <input type="password" name="matKhau" class="form-control" minlength="6" autocomplete="new-password" />
+                </div>
+                <div class="col-md-auto">
+                    <button class="btn btn-primary" type="submit">Cấp tài khoản</button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <div class="text-secondary small">Mã tài khoản</div>
+                    <div class="fw-semibold">@portalAccount.MaTaiKhoanKh</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-secondary small">Tên đăng nhập</div>
+                    <div class="fw-semibold">@portalAccount.TenDangNhap</div>
+                </div>
+                <div class="col-md-2">
+                    <div class="text-secondary small">Trạng thái</div>
+                    <span class="badge @(portalAccount.BiKhoa ? "text-bg-danger" : "text-bg-success")">@(portalAccount.BiKhoa ? "Bị khóa" : "Hoạt động")</span>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-secondary small">Lần đăng nhập cuối</div>
+                    <div class="fw-semibold">@(portalAccount.LanDangNhapCuoi?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa đăng nhập")</div>
+                </div>
+            </div>
+            <div class="row g-2 mt-3">
+                <div class="col-md-7">
+                    <form asp-action="ResetPortalPassword" asp-route-id="@Model.MaKh" method="post" class="d-flex gap-2">
+                        @Html.AntiForgeryToken()
+                        <input type="password" name="matKhau" class="form-control" minlength="6" placeholder="Mật khẩu mới" autocomplete="new-password" />
+                        <button class="btn btn-outline-primary" type="submit">Đặt lại mật khẩu</button>
+                    </form>
+                </div>
+                <div class="col-md-auto">
+                    <form asp-action="TogglePortalAccountLock" asp-route-id="@Model.MaKh" method="post">
+                        @Html.AntiForgeryToken()
+                        <button class="btn @(portalAccount.BiKhoa ? "btn-outline-success" : "btn-outline-danger")" type="submit">
+                            @(portalAccount.BiKhoa ? "Mở khóa tài khoản" : "Khóa tài khoản")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+
     <div class="card section-card p-3">
         <div class="section-card-title mb-3">
             <i class="bi bi-person-vcard"></i>
             <span>Thông tin khách hàng</span>
         </div>
         <form asp-action="Edit" method="post" enctype="multipart/form-data">
-            <div asp-validation-summary="All" class="text-danger mb-3 fw-semibold"></div>
             <input type="hidden" asp-for="MaKh" />
+            <input type="hidden" asp-for="AnhDaiDienUrl" />
 
             <div class="row g-3">
                 <div class="col-md-4">
@@ -62,7 +142,7 @@
                 </div>
                 <div class="col-md-4">
                     <label asp-for="NgaySinh" class="form-label js-date-label">Ngày sinh</label>
-                    <input asp-for="NgaySinh" type="date" class="form-control" />
+                    <input id="NgaySinh" name="NgaySinh" type="date" class="form-control" max="@maxBirthDate" value="@birthDateValue" />
                     <span asp-validation-for="NgaySinh" class="text-danger"></span>
                 </div>
 
@@ -75,6 +155,36 @@
                     <label asp-for="DiaChi" class="form-label">Địa chỉ</label>
                     <input asp-for="DiaChi" class="form-control" />
                     <span asp-validation-for="DiaChi" class="text-danger"></span>
+                </div>
+                <div class="personal-extra-fields col-12">
+                    <div class="soft-panel p-3 mt-1">
+                        <div class="section-card-title mb-2">
+                            <i class="bi bi-briefcase"></i>
+                            <span>Thông tin nghề nghiệp và thu nhập</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label asp-for="NgheNghiep" class="form-label">Nghề nghiệp</label>
+                                <input asp-for="NgheNghiep" class="form-control" />
+                                <span asp-validation-for="NgheNghiep" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-3">
+                                <label asp-for="NoiLamViec" class="form-label">Nơi làm việc</label>
+                                <input asp-for="NoiLamViec" class="form-control" />
+                                <span asp-validation-for="NoiLamViec" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-3">
+                                <label asp-for="ChucVu" class="form-label">Chức vụ</label>
+                                <input asp-for="ChucVu" class="form-control" />
+                                <span asp-validation-for="ChucVu" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-3">
+                                <label asp-for="ThuNhapHangThang" class="form-label">Thu nhập hàng tháng</label>
+                                <input asp-for="ThuNhapHangThang" class="form-control" inputmode="numeric" />
+                                <span asp-validation-for="ThuNhapHangThang" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -125,6 +235,13 @@
             <div class="mt-3">
                 <label class="form-label">Ảnh đại diện</label>
                 <input type="file" name="AnhDaiDienFile" class="form-control" accept="image/*" />
+                @if (!string.IsNullOrWhiteSpace(Model.AnhDaiDienUrl))
+                {
+                    <div class="mt-2 d-flex align-items-center gap-2">
+                        <img src="@Model.AnhDaiDienUrl" alt="Ảnh đại diện hiện tại" class="rounded-circle" style="width:48px;height:48px;object-fit:cover;object-position:center 25%;" />
+                        <span class="form-text text-success">Ảnh hiện tại/ảnh vừa chọn vẫn được giữ.</span>
+                    </div>
+                }
                 <div class="form-text">Khách hàng doanh nghiệp có thể không cần ảnh đại diện.</div>
                 @Html.ValidationMessage("AnhDaiDienFile", "", new { @class = "text-danger" })
             </div>
@@ -165,9 +282,9 @@
         <div class="row g-3 align-items-stretch">
             <div class="col-md-4">
                 <div class="metric-tile">
-                    <div class="text-secondary small">Diem hien tai</div>
-                    <div class="display-6 fw-semibold @creditClass">@(credit?.DiemTinDung.ToString() ?? "650")</div>
-                    <div class="text-secondary small">Xếp hạng: <span class="fw-semibold">@(credit?.XepHangRuiRo ?? "BBB")</span></div>
+                    <div class="text-secondary small">Điểm hiện tại</div>
+                    <div class="display-6 fw-semibold @creditClass">@(credit?.DiemTinDung.ToString() ?? "Chưa có")</div>
+                    <div class="text-secondary small">Xếp hạng: <span class="fw-semibold">@(credit?.XepHangRuiRo ?? "Chưa có")</span></div>
                 </div>
             </div>
             <div class="col-md-4">
@@ -182,7 +299,7 @@
                     @Html.AntiForgeryToken()
                     <label class="form-label small text-secondary mb-1 js-income-label">Thu nhập/doanh thu tháng</label>
                     <input name="thuNhapHangThang" class="form-control form-control-sm mb-2" inputmode="numeric" value="@(credit?.ThuNhapHangThang?.ToString("0") ?? "")" />
-                    <button class="btn btn-sm btn-outline-primary w-100" type="submit">Cap nhat va tinh lai</button>
+                    <button class="btn btn-sm btn-outline-primary w-100" type="submit">Cập nhật và tính lại</button>
                 </form>
             </div>
         </div>
@@ -202,7 +319,7 @@
                 </div>
                 <div class="text-secondary small">Tài sản đã bán sẽ không được tính vào hồ sơ vay mới.</div>
             </div>
-            <span class="status-chip status-chip-muted">@assetList.Count tai san</span>
+            <span class="status-chip status-chip-muted">@assetList.Count tài sản</span>
         </div>
 
         @if (TempData["AssetError"] != null)
@@ -214,17 +331,17 @@
             @Html.AntiForgeryToken()
             <div class="row g-2">
                 <div class="col-md-4"><label class="form-label small text-secondary mb-1">Loại tài sản</label><input name="LoaiTaiSan" class="form-control form-control-sm" /></div>
-                <div class="col-md-3"><label class="form-label small text-secondary mb-1">Gia tri khai bao</label><input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" /></div>
-                <div class="col-md-2"><label class="form-label small text-secondary mb-1">Ty le LTV</label><input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" /></div>
+                <div class="col-md-3"><label class="form-label small text-secondary mb-1">Giá trị khai báo</label><input name="GiaTriKhaiBao" class="form-control form-control-sm" inputmode="numeric" /></div>
+                <div class="col-md-2"><label class="form-label small text-secondary mb-1">Tỷ lệ LTV</label><input name="TyLeLtv" class="form-control form-control-sm" value="0.7" inputmode="decimal" /></div>
                 <div class="col-md-3 d-flex align-items-end"><button class="btn btn-sm btn-primary w-100" type="submit">Thêm tài sản</button></div>
                 <div class="col-md-6"><label class="form-label small text-secondary mb-1">Giấy tờ pháp lý</label><input name="GiayToPhapLy" class="form-control form-control-sm" /></div>
-                <div class="col-md-6"><label class="form-label small text-secondary mb-1">Mo ta</label><input name="MoTa" class="form-control form-control-sm" /></div>
+                <div class="col-md-6"><label class="form-label small text-secondary mb-1">Mô tả</label><input name="MoTa" class="form-control form-control-sm" /></div>
             </div>
         </form>
 
         @if (assetList.Count == 0)
         {
-            <div class="text-secondary mt-3">Chưa có tai san.</div>
+            <div class="text-secondary mt-3">Chưa có tài sản.</div>
         }
         else
         {
@@ -232,9 +349,9 @@
                 <table class="table table-sm align-middle mb-0 asset-table">
                     <thead>
                         <tr class="text-secondary small">
-                            <th>Ma</th>
-                            <th>Loai</th>
-                            <th class="text-end">Khai bao</th>
+                            <th>Mã</th>
+                            <th>Loại</th>
+                            <th class="text-end">Khai báo</th>
                             <th class="text-end">Định giá</th>
                             <th class="text-center">LTV</th>
                             <th class="text-center">Định giá</th>
@@ -296,6 +413,7 @@
         (function () {
             const type = document.querySelector('.js-customer-type');
             const business = document.querySelector('.business-fields');
+            const personalExtra = document.querySelector('.personal-extra-fields');
             const nameLabel = document.querySelector('.js-name-label');
             const idLabel = document.querySelector('.js-id-label');
             const dateLabel = document.querySelector('.js-date-label');
@@ -304,6 +422,7 @@
             function sync() {
                 const isBusiness = (type.value || '').toLowerCase().includes('doanh');
                 business.style.display = isBusiness ? '' : 'none';
+                personalExtra.style.display = isBusiness ? 'none' : '';
                 nameLabel.textContent = isBusiness ? 'Tên doanh nghiệp' : 'Họ tên';
                 idLabel.textContent = isBusiness ? 'Mã số đăng ký/CCCD đại diện' : 'CMND/CCCD';
                 dateLabel.textContent = isBusiness ? 'Ngày sinh người đại diện' : 'Ngày sinh';

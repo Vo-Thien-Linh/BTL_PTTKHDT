@@ -1,14 +1,16 @@
 @model BTL_PTTKHDT.Models.NhanVien
 @{
+    var maxBirthDate = DateOnly.FromDateTime(DateTime.Today).AddYears(-18).ToString("yyyy-MM-dd");
     ViewData["Title"] = "Thêm nhân viên";
+    var pendingPasswordToken = ViewData["PendingPasswordToken"] as string;
 }
 
 <div class="container-fluid">
     <h2>Thêm nhân viên mới</h2>
     <div class="card p-3">
         <form asp-action="Create" method="post" enctype="multipart/form-data">
-            <div asp-validation-summary="All" class="text-danger mb-3 fw-semibold"></div>
-
+            <input type="hidden" asp-for="AnhDaiDienUrl" />
+            <input type="hidden" name="matKhauToken" value="@pendingPasswordToken" />
             <div class="mb-3">
                 <label class="form-label">Mã nhân viên</label>
                 <input type="hidden" asp-for="MaNv" />
@@ -22,7 +24,7 @@
             </div>
 
             <div class="mb-3">
-                <label asp-for="SoDienThoai" class="form-label">Số điện thoại dang nhap</label>
+                <label asp-for="SoDienThoai" class="form-label">Số điện thoại đăng nhập</label>
                 <input asp-for="SoDienThoai" class="form-control" maxlength="10" inputmode="numeric" />
                 <span asp-validation-for="SoDienThoai" class="text-danger"></span>
             </div>
@@ -36,12 +38,16 @@
             <div class="mb-3">
                 <label class="form-label">Mật khẩu ban đầu</label>
                 <input type="password" name="matKhau" class="form-control" minlength="6" autocomplete="new-password" />
+                @if (!string.IsNullOrWhiteSpace(pendingPasswordToken))
+                {
+                    <div class="form-text text-success">Mật khẩu đã nhập hợp lệ và được giữ tạm. Có thể để trống ô này khi bấm Lưu lại.</div>
+                }
                 @Html.ValidationMessage("matKhau", "", new { @class = "text-danger" })
             </div>
 
             <div class="mb-3">
                 <label asp-for="NgaySinh" class="form-label">Ngày sinh</label>
-                <input asp-for="NgaySinh" type="date" class="form-control" />
+                <input asp-for="NgaySinh" type="date" class="form-control" max="@maxBirthDate" value="@(Model.NgaySinh == default ? "" : Model.NgaySinh.ToString("yyyy-MM-dd"))" />
                 <span asp-validation-for="NgaySinh" class="text-danger"></span>
             </div>
 
@@ -65,12 +71,10 @@
                 <label asp-for="VaiTro" class="form-label">Vai trò</label>
                 <select asp-for="VaiTro" class="form-select">
                     <option value="">-- Chọn vai trò --</option>
-                    <option value="Giao dịch viên">Giao dịch viên</option>
-                    <option value="Nhân viên tin dung">Nhân viên tín dụng</option>
-                    <option value="Nhân viên thu no">Nhân viên thu nợ</option>
-                    <option value="Kiểm soát viên">Kiểm soát viên</option>
-                    <option value="Trưởng phòng">Trưởng phòng</option>
-                    <option value="Quản trị hệ thống">Quản trị hệ thống</option>
+                    @foreach (var role in AppRoles.All)
+                    {
+                        <option value="@role">@role</option>
+                    }
                 </select>
                 <span asp-validation-for="VaiTro" class="text-danger"></span>
             </div>
@@ -78,6 +82,13 @@
             <div class="mb-3">
                 <label class="form-label">Ảnh đại diện</label>
                 <input type="file" name="AnhDaiDienFile" class="form-control" accept="image/*" />
+                @if (!string.IsNullOrWhiteSpace(Model.AnhDaiDienUrl))
+                {
+                    <div class="mt-2 d-flex align-items-center gap-2">
+                        <img src="@Model.AnhDaiDienUrl" alt="Ảnh đại diện đã chọn" class="rounded-circle" style="width:48px;height:48px;object-fit:cover;object-position:center 25%;" />
+                        <span class="form-text text-success">Ảnh đã chọn được giữ tạm. Chọn file mới nếu muốn đổi.</span>
+                    </div>
+                }
                 @Html.ValidationMessage("AnhDaiDienFile", "", new { @class = "text-danger" })
             </div>
 

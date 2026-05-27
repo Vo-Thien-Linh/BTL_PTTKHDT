@@ -1,4 +1,5 @@
 using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Security;
 using BTL_PTTKHDT.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,7 @@ namespace BTL_PTTKHDT.Controllers
             _db = db;
         }
 
+        [PermissionAuthorize(AppPermissions.ViewDashboard)]
         public async Task<IActionResult> Index(int? year, CancellationToken cancellationToken)
         {
             var dashboard = await _dashboardService.GetDashboardAsync(year, cancellationToken);

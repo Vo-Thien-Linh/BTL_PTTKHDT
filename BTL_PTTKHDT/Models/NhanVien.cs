@@ -29,6 +29,8 @@ public partial class NhanVien
 
     public virtual ICollection<DonVay> DonVays { get; set; } = new List<DonVay>();
 
+    public virtual ICollection<CoCauNo> CoCauNos { get; set; } = new List<CoCauNo>();
+
     public virtual ICollection<HopDongTinDung> HopDongTinDungs { get; set; } = new List<HopDongTinDung>();
 
     public virtual ICollection<QuyTrinhPheDuyet> QuyTrinhPheDuyets { get; set; } = new List<QuyTrinhPheDuyet>();
@@ -38,4 +40,6 @@ public partial class NhanVien
     public virtual ICollection<TaiSanKhachHang> TaiSanKhachHangs { get; set; } = new List<TaiSanKhachHang>();
 
     public virtual ICollection<ThanhToan> ThanhToans { get; set; } = new List<ThanhToan>();
+
+    public virtual ICollection<XuLyThuHoiNo> XuLyThuHoiNos { get; set; } = new List<XuLyThuHoiNo>();
 }

@@ -33,6 +33,14 @@ public partial class KhachHang
 
     public string? LinhVucKinhDoanh { get; set; }
 
+    public string? NgheNghiep { get; set; }
+
+    public string? NoiLamViec { get; set; }
+
+    public string? ChucVu { get; set; }
+
+    public decimal? ThuNhapHangThang { get; set; }
+
     public decimal? DoanhThuBinhQuanThang { get; set; }
 
     public decimal? LoiNhuanBinhQuanThang { get; set; }
@@ -54,4 +62,6 @@ public partial class KhachHang
     public virtual ICollection<LichSuTinDung> LichSuTinDungs { get; set; } = new List<LichSuTinDung>();
 
     public virtual ICollection<TaiSanKhachHang> TaiSanKhachHangs { get; set; } = new List<TaiSanKhachHang>();
+
+    public virtual TaiKhoanKhachHang? TaiKhoanKhachHang { get; set; }
 }

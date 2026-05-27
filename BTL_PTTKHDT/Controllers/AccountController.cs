@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Security.Cryptography;
 using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Security;
 using BTL_PTTKHDT.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -13,7 +14,7 @@ namespace BTL_PTTKHDT.Controllers;
 [AllowAnonymous]
 public sealed class AccountController : Controller
 {
-    private const string AdminRole = "Quản trị hệ thống";
+    private const string ResetSessionPrefix = "ResetPassword";
     private readonly QltdnhContext _db;
     private readonly IEmailSender _emailSender;
 
@@ -28,6 +29,11 @@ public sealed class AccountController : Controller
     {
         if (User.Identity?.IsAuthenticated == true)
         {
+            if (User.IsInRole(AppRoles.KhachHang))
+            {
+                return RedirectToAction("Index", "CustomerPortal");
+            }
+
             return RedirectToLocal(returnUrl);
         }
 
@@ -65,8 +71,7 @@ public sealed class AccountController : Controller
 
         if (loginInfo == null)
         {
-            AddLoginError("Không tìm thấy tài khoản quản trị khớp với thông tin đăng nhập.");
-            return View(model);
+            return await TryCustomerLoginAsync(model, loginName, phoneNumber, cancellationToken);
         }
 
         if (loginInfo.BiKhoa)
@@ -78,12 +83,6 @@ public sealed class AccountController : Controller
         if (!loginInfo.IsActive)
         {
             AddLoginError("Nhân viên của tài khoản này đang bị ngừng hoạt động.");
-            return View(model);
-        }
-
-        if (!IsAdminRole(loginInfo.VaiTro))
-        {
-            AddLoginError($"Tài khoản không có quyền quản trị. Vai trò hiện tại: {loginInfo.VaiTro}.");
             return View(model);
         }
 
@@ -116,6 +115,7 @@ public sealed class AccountController : Controller
         trackedAccount.NgayCapNhat = DateTime.Now;
         await _db.SaveChangesAsync();
 
+        var role = AppRoles.NormalizeForClaim(loginInfo.VaiTro);
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, loginInfo.MaTaiKhoan),
@@ -123,7 +123,7 @@ public sealed class AccountController : Controller
             new("MaNV", loginInfo.MaNv),
             new("TenDangNhap", loginInfo.TenDangNhap),
             new("SoDienThoai", loginInfo.SoDienThoai),
-            new(ClaimTypes.Role, AdminRole)
+            new(ClaimTypes.Role, role)
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -139,6 +139,101 @@ public sealed class AccountController : Controller
             });
 
         return RedirectToLocal(model.ReturnUrl);
+    }
+
+    private async Task<IActionResult> TryCustomerLoginAsync(LoginViewModel model, string loginName, string phoneNumber, CancellationToken cancellationToken)
+    {
+        var customerInfo = await (
+                from account in _db.TaiKhoanKhachHangs.AsNoTracking()
+                join customer in _db.KhachHangs.AsNoTracking() on account.MaKh equals customer.MaKh
+                where account.TenDangNhap == loginName
+                    || customer.SoDienThoai == phoneNumber
+                    || customer.CmndCccd == loginName
+                    || customer.MaKh == loginName
+                select new
+                {
+                    account.MaTaiKhoanKh,
+                    account.MaKh,
+                    account.TenDangNhap,
+                    account.MatKhauHash,
+                    account.BiKhoa,
+                    customer.HoTen,
+                    customer.SoDienThoai,
+                    customer.IsActive
+                })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (customerInfo == null)
+        {
+            AddLoginError("Không tìm thấy tài khoản khớp với thông tin đăng nhập.");
+            return View(model);
+        }
+
+        if (customerInfo.BiKhoa)
+        {
+            AddLoginError("Tài khoản khách hàng đang bị khóa. Hãy liên hệ ngân hàng để được hỗ trợ.");
+            return View(model);
+        }
+
+        if (!customerInfo.IsActive)
+        {
+            AddLoginError("Hồ sơ khách hàng đang ngừng hoạt động.");
+            return View(model);
+        }
+
+        var trackedAccount = await _db.TaiKhoanKhachHangs
+            .FirstOrDefaultAsync(x => x.MaTaiKhoanKh == customerInfo.MaTaiKhoanKh, cancellationToken);
+
+        if (trackedAccount == null)
+        {
+            AddLoginError("Không tìm thấy bản ghi tài khoản khách hàng để cập nhật trạng thái đăng nhập.");
+            return View(model);
+        }
+
+        if (!PasswordHashing.Verify(model.MatKhau, customerInfo.MatKhauHash))
+        {
+            trackedAccount.SoLanSaiMatKhau++;
+            if (trackedAccount.SoLanSaiMatKhau >= 5)
+            {
+                trackedAccount.BiKhoa = true;
+            }
+
+            trackedAccount.NgayCapNhat = DateTime.Now;
+            await _db.SaveChangesAsync(cancellationToken);
+
+            AddLoginError("Mật khẩu không đúng.");
+            return View(model);
+        }
+
+        trackedAccount.SoLanSaiMatKhau = 0;
+        trackedAccount.LanDangNhapCuoi = DateTime.Now;
+        trackedAccount.NgayCapNhat = DateTime.Now;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, customerInfo.MaTaiKhoanKh),
+            new(ClaimTypes.Name, customerInfo.HoTen),
+            new("MaKH", customerInfo.MaKh),
+            new("TenDangNhap", customerInfo.TenDangNhap),
+            new("SoDienThoai", customerInfo.SoDienThoai),
+            new("AccountKind", "Customer"),
+            new(ClaimTypes.Role, AppRoles.KhachHang)
+        };
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal,
+            new AuthenticationProperties
+            {
+                IsPersistent = model.RememberMe,
+                ExpiresUtc = model.RememberMe ? DateTimeOffset.UtcNow.AddDays(7) : DateTimeOffset.UtcNow.AddHours(8)
+            });
+
+        return RedirectToAction("Index", "CustomerPortal");
     }
 
     [HttpPost]
@@ -200,12 +295,6 @@ public sealed class AccountController : Controller
             return View(model);
         }
 
-        if (!IsAdminRole(accountInfo.VaiTro))
-        {
-            ModelState.AddModelError(string.Empty, "Chỉ tài khoản quản trị hệ thống được đặt lại mật khẩu ở màn này.");
-            return View(model);
-        }
-
         if (string.IsNullOrWhiteSpace(accountInfo.Email))
         {
             ModelState.AddModelError(string.Empty, "Tài khoản này chưa có email. Hãy cập nhật email nhân viên trước khi dùng quên mật khẩu.");
@@ -213,10 +302,7 @@ public sealed class AccountController : Controller
         }
 
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        accountInfo.Account.ResetPasswordCodeHash = PasswordHashing.Hash(code);
-        accountInfo.Account.ResetPasswordExpiresAt = DateTime.Now.AddMinutes(10);
-        accountInfo.Account.NgayCapNhat = DateTime.Now;
-        await _db.SaveChangesAsync(cancellationToken);
+        SaveResetCodeToSession(accountInfo.Account.MaTaiKhoan, code);
 
         var resetUrl = Url.Action(nameof(ResetPassword), "Account", new { id = accountInfo.Account.MaTaiKhoan }, Request.Scheme);
         var body = $"""
@@ -237,20 +323,14 @@ Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email nà
         }
         catch (InvalidOperationException ex)
         {
-            accountInfo.Account.ResetPasswordCodeHash = null;
-            accountInfo.Account.ResetPasswordExpiresAt = null;
-            accountInfo.Account.NgayCapNhat = DateTime.Now;
-            await _db.SaveChangesAsync(cancellationToken);
+            ClearResetCodeFromSession(accountInfo.Account.MaTaiKhoan);
 
             ModelState.AddModelError(string.Empty, ex.Message);
             return View(model);
         }
         catch (Exception)
         {
-            accountInfo.Account.ResetPasswordCodeHash = null;
-            accountInfo.Account.ResetPasswordExpiresAt = null;
-            accountInfo.Account.NgayCapNhat = DateTime.Now;
-            await _db.SaveChangesAsync(cancellationToken);
+            ClearResetCodeFromSession(accountInfo.Account.MaTaiKhoan);
 
             ModelState.AddModelError(string.Empty, "Không gửi được email đặt lại mật khẩu. Hãy kiểm tra Gmail, App Password hoặc kết nối mạng.");
             return View(model);
@@ -287,15 +367,15 @@ Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email nà
             return View(model);
         }
 
-        if (string.IsNullOrWhiteSpace(account.ResetPasswordCodeHash)
-            || account.ResetPasswordExpiresAt == null
-            || account.ResetPasswordExpiresAt < DateTime.Now)
+        var resetInfo = GetResetCodeFromSession(model.MaTaiKhoan);
+        if (resetInfo == null || resetInfo.Value.expiresAt < DateTimeOffset.UtcNow)
         {
+            ClearResetCodeFromSession(model.MaTaiKhoan);
             ModelState.AddModelError(string.Empty, "Mã xác nhận đã hết hạn. Hãy yêu cầu mã mới.");
             return View(model);
         }
 
-        if (!PasswordHashing.Verify(model.Code.Trim(), account.ResetPasswordCodeHash))
+        if (!PasswordHashing.Verify(model.Code.Trim(), resetInfo.Value.codeHash))
         {
             ModelState.AddModelError(nameof(model.Code), "Mã xác nhận không đúng.");
             return View(model);
@@ -304,10 +384,9 @@ Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email nà
         account.MatKhauHash = PasswordHashing.Hash(model.NewPassword);
         account.SoLanSaiMatKhau = 0;
         account.BiKhoa = false;
-        account.ResetPasswordCodeHash = null;
-        account.ResetPasswordExpiresAt = null;
         account.NgayCapNhat = DateTime.Now;
         await _db.SaveChangesAsync(cancellationToken);
+        ClearResetCodeFromSession(model.MaTaiKhoan);
 
         TempData["LoginMessage"] = "Đặt lại mật khẩu thành công. Hãy đăng nhập bằng mật khẩu mới.";
         return RedirectToAction(nameof(Login));
@@ -315,6 +394,11 @@ Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email nà
 
     private IActionResult RedirectToLocal(string? returnUrl)
     {
+        if (User.IsInRole(AppRoles.KhachHang))
+        {
+            return RedirectToAction("Index", "CustomerPortal");
+        }
+
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
         {
             return Redirect(returnUrl);
@@ -333,10 +417,31 @@ Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email nà
         return value.Trim().Replace(" ", string.Empty).Replace(".", string.Empty).Replace("-", string.Empty);
     }
 
-    private static bool IsAdminRole(string? value)
+    private void SaveResetCodeToSession(string accountId, string code)
     {
-        var role = value?.Trim();
-        return string.Equals(role, AdminRole, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(role, "Quan tri he thong", StringComparison.OrdinalIgnoreCase);
+        HttpContext.Session.SetString(ResetCodeHashKey(accountId), PasswordHashing.Hash(code));
+        HttpContext.Session.SetString(ResetExpiresKey(accountId), DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds().ToString());
     }
+
+    private (string codeHash, DateTimeOffset expiresAt)? GetResetCodeFromSession(string accountId)
+    {
+        var codeHash = HttpContext.Session.GetString(ResetCodeHashKey(accountId));
+        var expiresValue = HttpContext.Session.GetString(ResetExpiresKey(accountId));
+        if (string.IsNullOrWhiteSpace(codeHash) || !long.TryParse(expiresValue, out var expiresUnix))
+        {
+            return null;
+        }
+
+        return (codeHash, DateTimeOffset.FromUnixTimeSeconds(expiresUnix));
+    }
+
+    private void ClearResetCodeFromSession(string accountId)
+    {
+        HttpContext.Session.Remove(ResetCodeHashKey(accountId));
+        HttpContext.Session.Remove(ResetExpiresKey(accountId));
+    }
+
+    private static string ResetCodeHashKey(string accountId) => $"{ResetSessionPrefix}:{accountId}:CodeHash";
+
+    private static string ResetExpiresKey(string accountId) => $"{ResetSessionPrefix}:{accountId}:Expires";
 }

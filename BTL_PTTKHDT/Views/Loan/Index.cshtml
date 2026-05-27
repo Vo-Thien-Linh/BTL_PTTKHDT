@@ -65,7 +65,7 @@
 </div>
 
 @* ── Filter Bar ── *@
-<form method="get" class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+<form method="get" class="d-flex align-items-center gap-2 mb-3 flex-wrap" data-auto-filter>
     @* Status Filter *@
     <div class="dropdown">
         <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1"
@@ -222,18 +222,21 @@
         <div class="text-secondary small">
             Trang @Model.Page / @totalPages
         </div>
-        <div class="d-flex gap-2">
-            <a class="btn btn-sm btn-outline-secondary px-3 @(Model.Page <= 1 ? "disabled" : "")"
-               href="@Url.Action("Index", new { q = Model.Query, status = Model.Status, period = Model.Period, page = Model.Page - 1 })"
-               id="btn-pagination-prev">
-                Trước
-            </a>
-            <a class="btn btn-sm btn-primary px-3 @(Model.Page >= totalPages ? "disabled" : "")"
-               href="@Url.Action("Index", new { q = Model.Query, status = Model.Status, period = Model.Period, page = Model.Page + 1 })"
-               id="btn-pagination-next">
-                Tiếp
-            </a>
-        </div>
+        @if (totalPages > 1)
+        {
+            <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-secondary px-3 @(Model.Page <= 1 ? "disabled" : "")"
+                   href="@Url.Action("Index", new { q = Model.Query, status = Model.Status, period = Model.Period, page = Model.Page - 1 })"
+                   id="btn-pagination-prev">
+                    Trước
+                </a>
+                <a class="btn btn-sm btn-primary px-3 @(Model.Page >= totalPages ? "disabled" : "")"
+                   href="@Url.Action("Index", new { q = Model.Query, status = Model.Status, period = Model.Period, page = Model.Page + 1 })"
+                   id="btn-pagination-next">
+                    Tiếp
+                </a>
+            </div>
+        }
     </div>
 </div>
 

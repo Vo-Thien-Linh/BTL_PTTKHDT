@@ -37,6 +37,8 @@ public partial class KhoanVay
 
     public virtual ICollection<BaoCaoTaiSanLog> BaoCaoTaiSanLogs { get; set; } = new List<BaoCaoTaiSanLog>();
 
+    public virtual ICollection<CoCauNo> CoCauNos { get; set; } = new List<CoCauNo>();
+
     public virtual HopDongTinDung? HopDongTinDung { get; set; }
 
     public virtual ICollection<LichTraNo> LichTraNos { get; set; } = new List<LichTraNo>();
@@ -50,4 +52,6 @@ public partial class KhoanVay
     public virtual ICollection<TaiSanTheChap> TaiSanTheChaps { get; set; } = new List<TaiSanTheChap>();
 
     public virtual ICollection<ThanhToan> ThanhToans { get; set; } = new List<ThanhToan>();
+
+    public virtual ICollection<XuLyThuHoiNo> XuLyThuHoiNos { get; set; } = new List<XuLyThuHoiNo>();
 }

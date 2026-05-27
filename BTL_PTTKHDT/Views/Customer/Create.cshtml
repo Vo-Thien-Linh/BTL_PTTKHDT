@@ -1,14 +1,17 @@
 @model BTL_PTTKHDT.Models.KhachHang
 @{
     ViewData["Title"] = "Thêm khách hàng mới";
+    var maxBirthDate = DateOnly.FromDateTime(DateTime.Today).AddYears(-18).ToString("yyyy-MM-dd");
+    var birthDateValue = Model.NgaySinh.Year < 1900 ? maxBirthDate : Model.NgaySinh.ToString("yyyy-MM-dd");
+    var pendingPasswordToken = ViewData["PendingPasswordToken"] as string;
 }
 
 <div class="container-fluid">
     <h2>@ViewData["Title"]</h2>
     <div class="card p-3">
         <form asp-action="Create" method="post" enctype="multipart/form-data">
-            <div asp-validation-summary="All" class="text-danger mb-3 fw-semibold"></div>
-
+            <input type="hidden" asp-for="AnhDaiDienUrl" />
+            <input type="hidden" name="matKhauToken" value="@pendingPasswordToken" />
             <div class="row g-3 mb-3">
                 <div class="col-md-4">
                     <label class="form-label">Mã khách hàng</label>
@@ -41,7 +44,7 @@
                         </div>
                         <div class="col-md-4">
                             <label asp-for="NgaySinh" class="form-label">Ngày sinh</label>
-                            <input asp-for="NgaySinh" type="date" class="form-control" />
+                            <input id="NgaySinh" name="NgaySinh" type="date" class="form-control" max="@maxBirthDate" value="@birthDateValue" />
                             <span asp-validation-for="NgaySinh" class="text-danger"></span>
                         </div>
                         <div class="col-md-4">
@@ -58,6 +61,26 @@
                             <label asp-for="DiaChi" class="form-label">Địa chỉ</label>
                             <input asp-for="DiaChi" class="form-control" />
                             <span asp-validation-for="DiaChi" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="NgheNghiep" class="form-label">Nghề nghiệp</label>
+                            <input asp-for="NgheNghiep" class="form-control" />
+                            <span asp-validation-for="NgheNghiep" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="NoiLamViec" class="form-label">Nơi làm việc</label>
+                            <input asp-for="NoiLamViec" class="form-control" />
+                            <span asp-validation-for="NoiLamViec" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="ChucVu" class="form-label">Chức vụ</label>
+                            <input asp-for="ChucVu" class="form-control" />
+                            <span asp-validation-for="ChucVu" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-4">
+                            <label asp-for="ThuNhapHangThang" class="form-label">Thu nhập hàng tháng</label>
+                            <input asp-for="ThuNhapHangThang" class="form-control" inputmode="numeric" />
+                            <span asp-validation-for="ThuNhapHangThang" class="text-danger"></span>
                         </div>
                     </div>
                 </div>
@@ -111,7 +134,7 @@
                         </div>
                         <div class="col-md-4">
                             <label asp-for="NgaySinh" class="form-label">Ngày sinh người đại diện</label>
-                            <input asp-for="NgaySinh" type="date" class="form-control" />
+                            <input id="NgaySinhBusiness" name="NgaySinh" type="date" class="form-control" max="@maxBirthDate" value="@birthDateValue" />
                             <span asp-validation-for="NgaySinh" class="text-danger"></span>
                         </div>
                         <div class="col-md-4">
@@ -151,8 +174,26 @@
             <div class="mt-3">
                 <label class="form-label">Ảnh đại diện</label>
                 <input type="file" name="AnhDaiDienFile" class="form-control" accept="image/*" />
+                @if (!string.IsNullOrWhiteSpace(Model.AnhDaiDienUrl))
+                {
+                    <div class="mt-2 d-flex align-items-center gap-2">
+                        <img src="@Model.AnhDaiDienUrl" alt="Ảnh đại diện đã chọn" class="rounded-circle" style="width:48px;height:48px;object-fit:cover;object-position:center 25%;" />
+                        <span class="form-text text-success">Ảnh đã chọn được giữ tạm. Chọn file mới nếu muốn đổi.</span>
+                    </div>
+                }
                 <div class="form-text">Khách hàng doanh nghiệp có thể không cần ảnh đại diện.</div>
                 @Html.ValidationMessage("AnhDaiDienFile", "", new { @class = "text-danger" })
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label" for="matKhau">Mật khẩu cổng khách hàng</label>
+                <input id="matKhau" name="matKhau" type="password" class="form-control" minlength="6" autocomplete="new-password" />
+                @if (!string.IsNullOrWhiteSpace(pendingPasswordToken))
+                {
+                    <div class="form-text text-success">Mật khẩu đã nhập hợp lệ và được giữ tạm. Có thể để trống ô này khi bấm Lưu lại.</div>
+                }
+                <div class="form-text">Khách hàng sẽ đăng nhập bằng số điện thoại vừa nhập.</div>
+                @Html.ValidationMessage("matKhau", "", new { @class = "text-danger" })
             </div>
 
             <div class="mt-3">

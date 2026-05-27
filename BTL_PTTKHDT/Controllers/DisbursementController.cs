@@ -1,11 +1,14 @@
 ﻿using System.Globalization;
 using BTL_PTTKHDT.Models;
+using BTL_PTTKHDT.Security;
 using BTL_PTTKHDT.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace BTL_PTTKHDT.Controllers;
 
+[PermissionAuthorize(AppPermissions.DisburseLoans)]
 public sealed class DisbursementController : Controller
 {
     private readonly QltdnhContext _db;
@@ -138,6 +141,15 @@ public sealed class DisbursementController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        var creditLimit = await _db.HanMucTinDungs.FirstOrDefaultAsync(x => x.MaKh == don.MaKh, ct);
+        var availableLimit = CalculateAvailableLoanLimit(creditLimit?.HanMucConLai, collateralLimit);
+        if (availableLimit < don.SoTienYeuCau)
+        {
+            TempData["DisburseError"] =
+                $"So tien co the giai ngan {FormatMoney(availableLimit)} nho hon so tien vay {FormatMoney(don.SoTienYeuCau)}.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var now = DateTime.Now;
         var actor = await GetDefaultEmployeeIdAsync(ct);
         if (string.IsNullOrWhiteSpace(actor))
@@ -221,6 +233,12 @@ public sealed class DisbursementController : Controller
             ltnNext++;
         }
 
+        if (creditLimit != null)
+        {
+            creditLimit.HanMucDaSuDung += soTienVay;
+            creditLimit.NgayCapNhat = ngayGiaiNgan;
+        }
+
         await _db.SaveChangesAsync(ct);
         await _creditScoreService.RecalculateAsync(don.MaKh, "Giải ngân", ct);
 
@@ -232,6 +250,10 @@ public sealed class DisbursementController : Controller
         var assets = await GetEligibleAssetsAsync(don.MaKh, ct);
         var tong = assets.Sum(x => x.GiaTriDinhGia ?? x.GiaTriKhaiBao);
         var hanMuc = assets.Sum(CalculateCollateralLimit);
+        var creditLimit = await _db.HanMucTinDungs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.MaKh == don.MaKh, ct);
+        var soTienCoTheGiaiNgan = CalculateAvailableLoanLimit(creditLimit?.HanMucConLai, hanMuc);
 
         return new DisbursementRowViewModel
         {
@@ -245,8 +267,22 @@ public sealed class DisbursementController : Controller
             NgayNopDon = don.NgayNopDon,
             TongGiaTriDamBao = tong,
             HanMucGoiY = hanMuc,
-            DaDuDieuKienTaiSan = hanMuc >= don.SoTienYeuCau
+            HanMucTinDungConLai = creditLimit?.HanMucConLai,
+            SoTienCoTheGiaiNgan = soTienCoTheGiaiNgan,
+            DaDuDieuKienTaiSan = hanMuc >= don.SoTienYeuCau,
+            DaDuDieuKienHanMuc = soTienCoTheGiaiNgan >= don.SoTienYeuCau
         };
+    }
+
+    private static decimal CalculateAvailableLoanLimit(decimal? creditLimitRemaining, decimal collateralLimit)
+    {
+        var safeCollateralLimit = Math.Max(0m, collateralLimit);
+        if (!creditLimitRemaining.HasValue)
+        {
+            return safeCollateralLimit;
+        }
+
+        return Math.Min(Math.Max(0m, creditLimitRemaining.Value), safeCollateralLimit);
     }
 
     private static decimal CalculateCollateralLimit(TaiSanKhachHang asset)
@@ -301,6 +337,12 @@ public sealed class DisbursementController : Controller
 
     private async Task<string?> GetDefaultEmployeeIdAsync(CancellationToken ct)
     {
+        var maNv = User.FindFirst("MaNV")?.Value;
+        if (!string.IsNullOrWhiteSpace(maNv))
+        {
+            return maNv;
+        }
+
         var nv = await _db.NhanViens.AsNoTracking().OrderBy(x => x.MaNv).Select(x => x.MaNv).FirstOrDefaultAsync(ct);
         return string.IsNullOrWhiteSpace(nv) ? null : nv;
     }

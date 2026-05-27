@@ -1,0 +1,85 @@
+@model IReadOnlyList<RolePermissionState>
+@{
+    ViewData["Title"] = "Phân quyền chức vụ";
+    var selectedRole = ViewBag.SelectedRole as string ?? AppRoles.GiaoDichVien;
+    var groups = Model.GroupBy(x => x.Permission.Group).ToList();
+}
+
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="mb-1">Phân quyền chức vụ</h2>
+            <div class="text-secondary small">Tick quyền được phép dùng cho từng chức vụ. Nếu chưa lưu, hệ thống dùng quyền mặc định ban đầu.</div>
+        </div>
+        <a asp-action="Index" class="btn btn-outline-secondary">Quay lại nhân sự</a>
+    </div>
+
+    @if (TempData["EmployeeSuccess"] != null)
+    {
+        <div class="alert alert-success">@TempData["EmployeeSuccess"]</div>
+    }
+    @if (TempData["EmployeeError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["EmployeeError"]</div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label">Chức vụ cần phân quyền</label>
+                    <select name="role" class="form-select">
+                        @foreach (var role in AppRoles.All)
+                        {
+                            <option value="@role" selected="@(selectedRole == role ? "selected" : null)">@role</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-auto">
+                    <button class="btn btn-outline-primary" type="submit">Xem quyền</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <form asp-action="SavePermissions" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="role" value="@selectedRole" />
+
+        <div class="row g-3">
+            @foreach (var group in groups)
+            {
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header fw-semibold">@group.Key</div>
+                        <div class="card-body">
+                            @foreach (var item in group)
+                            {
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="perm-@item.Permission.Code"
+                                           name="permissions"
+                                           value="@item.Permission.Code"
+                                           checked="@item.IsAllowed" />
+                                    <label class="form-check-label" for="perm-@item.Permission.Code">
+                                        @item.Permission.Name
+                                        @if (item.IsDefault)
+                                        {
+                                            <span class="badge text-bg-light ms-1">Mặc định</span>
+                                        }
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-3">
+            <a asp-action="Permissions" asp-route-role="@selectedRole" class="btn btn-outline-secondary">Hủy thay đổi</a>
+            <button type="submit" class="btn btn-primary">Lưu phân quyền</button>
+        </div>
+    </form>
+</div>
